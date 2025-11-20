@@ -1,0 +1,57 @@
+import React from 'react';
+import Feed from '../components/Feed';
+import { useStore } from '../context/StoreContext';
+import { Trophy, Star, Activity } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+const Home: React.FC = () => {
+    const { akitas } = useStore();
+    const recentChampions = akitas.filter(a => a.titles.length > 0).slice(0, 3);
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Feed */}
+            <div className="lg:col-span-2">
+                <Feed />
+            </div>
+
+            {/* Right Sidebar */}
+            <div className="hidden lg:block space-y-6">
+                {/* Recent Champions Widget */}
+                <div className="bg-white shadow rounded-lg p-4">
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center">
+                        <Trophy className="w-5 h-5 text-yellow-500 mr-2" />
+                        Recent Champions
+                    </h3>
+                    <ul className="space-y-3">
+                        {recentChampions.map(dog => (
+                            <li key={dog.id} className="flex items-center space-x-3">
+                                <img src={dog.avatar} alt={dog.name} className="w-10 h-10 rounded-full object-cover" />
+                                <div>
+                                    <Link to={`/akita/${dog.id}`} className="font-medium text-sm hover:text-brand-600 block">{dog.registeredName}</Link>
+                                    <span className="text-xs text-gray-500">{dog.titles.join(', ')}</span>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* Health Watch */}
+                <div className="bg-white shadow rounded-lg p-4">
+                     <h3 className="font-bold text-gray-900 mb-2 flex items-center">
+                        <Activity className="w-5 h-5 text-green-500 mr-2" />
+                        Health Database Stats
+                    </h3>
+                    <div className="text-sm text-gray-600 space-y-2">
+                        <p>OFA Hips Records: <span className="font-bold">1,240</span></p>
+                        <p>OFA Eyes Records: <span className="font-bold">890</span></p>
+                        <p>VGL Diversity Profiles: <span className="font-bold">350</span></p>
+                    </div>
+                    <Link to="/directory" className="mt-3 block w-full text-center text-brand-600 text-sm hover:underline">Find Breeders in Directory</Link>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default Home;

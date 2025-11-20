@@ -1,0 +1,840 @@
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useStore } from '../context/StoreContext';
+import { Activity, Award, Dna, FileText, GitBranch, Camera, Heart, Edit, Save, X, Plus, Trash, Sparkles, Upload, Download, Search, FileScan } from 'lucide-react';
+import { generateAkitaBio, parsePedigreeImage } from '../services/gemini';
+import { Achievement, HealthRecord, Akita } from '../types';
+
+// Interactive Pedigree Node
+const PedigreeNode: React.FC<{ 
+    akitaId?: string; 
+    depth: number; 
+    childId?: string; // For editing connections
+    relation?: 'sire' | 'dam'; // For editing connections
+    isEditingPedigree: boolean;
+    onAddNode: (childId: string, relation: 'sire' | 'dam') => void;
+}> = ({ akitaId, depth, childId, relation, isEditingPedigree, onAddNode }) => {
+    const { getAkita } = useStore();
+    const dog = akitaId ? getAkita(akitaId) : undefined;
+
+    if (depth === 0) return null;
+
+    return (
+        <div className="flex flex-col items-center mx-2">
+             <div className={`border p-2 rounded-lg shadow-sm text-center min-w-[120px] transition relative group ${!dog ? 'bg-gray-50 border-dashed border-gray-300' : 'bg-white border-gray-200'}`}>
+                 {dog ? (
+                     <>
+                        <Link to={`/akita/${dog.id}`} className="font-bold text-sm text-brand-700 hover:underline truncate max-w-[140px] block" title={dog.registeredName}>{dog.name}</Link>
+                        <div className="text-xs text-gray-500 truncate max-w-[140px]">{dog.titles.join(' ')}</div>
+                     </>
+                 ) : (
+                     isEditingPedigree && childId && relation ? (
+                         <button 
+                            onClick={() => onAddNode(childId, relation)}
+                            className="flex flex-col items-center justify-center w-full h-full py-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded transition"
+                         >
+                             <Plus className="w-5 h-5 mb-1" />
+                             <span className="text-xs font-medium">Add {relation === 'sire' ? 'Sire' : 'Dam'}</span>
+                         </button>
+                     ) : (
+                        <span className="text-xs text-gray-400 block py-2">Unknown</span>
+                     )
+                 )}
+             </div>
+             
+             {depth > 1 && (
+                 <div className="relative flex justify-center mt-4">
+                     {/* Connector Lines */}
+                     <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -mt-4 w-px h-4 bg-gray-300"></div>
+                     <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gray-300 -mt-4"></div> 
+                     
+                     <div className="flex gap-4">
+                         <PedigreeNode 
+                            akitaId={dog?.sireId} 
+                            depth={depth - 1} 
+                            childId={dog?.id} 
+                            relation="sire" 
+                            isEditingPedigree={isEditingPedigree}
+                            onAddNode={onAddNode}
+                        />
+                         <PedigreeNode 
+                            akitaId={dog?.damId} 
+                            depth={depth - 1} 
+                            childId={dog?.id} 
+                            relation="dam" 
+                            isEditingPedigree={isEditingPedigree}
+                            onAddNode={onAddNode}
+                        />
+                     </div>
+                 </div>
+             )}
+        </div>
+    );
+};
+
+const AkitaDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const { getAkita, getUser, currentUser, updateAkita, akitas, linkAncestor, createAncestor } = useStore();
+  const [activeTab, setActiveTab] = useState<'about' | 'pedigree' | 'health' | 'gallery'>('about');
+  
+  // Edit Mode State (Profile)
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>(null);
+  const [newAchievement, setNewAchievement] = useState<Partial<Achievement>>({ title: '', date: '', event: '' });
+  const [isGeneratingBio, setIsGeneratingBio] = useState(false);
+
+  // Pedigree Editing State
+  const [isEditingPedigree, setIsEditingPedigree] = useState(false);
+  const [addNodeModal, setAddNodeModal] = useState<{ open: boolean, childId: string, relation: 'sire' | 'dam' } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [foundDogs, setFoundDogs] = useState<Akita[]>([]);
+  const [manualNodeForm, setManualNodeForm] = useState({ name: '', registeredName: '', registrationNumber: '' });
+  
+  // Pedigree Scanning State
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const pedigreeInputRef = useRef<HTMLInputElement>(null);
+
+  // Health Record State
+  const [isAddingHealth, setIsAddingHealth] = useState(false);
+  const [newHealthRecord, setNewHealthRecord] = useState<Partial<HealthRecord>>({
+      type: 'OFA_HIPS',
+      result: '',
+      date: '',
+      certificateNumber: '',
+      notes: ''
+  });
+  const healthFileRef = useRef<HTMLInputElement>(null);
+
+  const akita = getAkita(id || '');
+  
+  // Derived data
+  const owner = akita ? getUser(akita.ownerId) : null;
+  const isOwner = currentUser.id === akita?.ownerId;
+
+  useEffect(() => {
+      if (akita) {
+          setEditForm({
+              ...akita,
+              titlesString: akita.titles.join(', ')
+          });
+      }
+  }, [akita, isEditing]);
+
+  if (!akita) return <div className="text-center py-10">Akita not found</div>;
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      setEditForm({ ...editForm, [e.target.name]: e.target.value });
+  };
+
+  const handleGenerateBio = async () => {
+      if(!editForm.name) return;
+      setIsGeneratingBio(true);
+      const bio = await generateAkitaBio(editForm.name, `${editForm.sex} ${editForm.color} Akita.`);
+      if (bio) {
+          setEditForm((prev: any) => ({ ...prev, about: bio }));
+      }
+      setIsGeneratingBio(false);
+  };
+
+  const handleAddAchievement = () => {
+      if (newAchievement.title && newAchievement.date) {
+          const ach: Achievement = {
+              id: Date.now().toString(),
+              title: newAchievement.title!,
+              date: newAchievement.date!,
+              event: newAchievement.event || '',
+          };
+          setEditForm({ ...editForm, achievements: [...editForm.achievements, ach] });
+          setNewAchievement({ title: '', date: '', event: '' });
+      }
+  };
+
+  const handleRemoveAchievement = (achId: string) => {
+      setEditForm({ ...editForm, achievements: editForm.achievements.filter((a: Achievement) => a.id !== achId) });
+  };
+
+  const saveChanges = () => {
+      const titles = editForm.titlesString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+      updateAkita(akita.id, {
+          ...editForm,
+          titles,
+          titlesString: undefined // Remove temporary field
+      });
+      setIsEditing(false);
+  };
+
+  // --- PEDIGREE EDITING FUNCTIONS ---
+
+  const openAddNodeModal = (childId: string, relation: 'sire' | 'dam') => {
+      setAddNodeModal({ open: true, childId, relation });
+      setSearchQuery('');
+      setFoundDogs([]);
+      setManualNodeForm({ name: '', registeredName: '', registrationNumber: '' });
+  };
+
+  const handleSearchDogs = (query: string) => {
+      setSearchQuery(query);
+      if (!query) {
+          setFoundDogs([]);
+          return;
+      }
+      const targetSex = addNodeModal?.relation === 'sire' ? 'Male' : 'Female';
+      const results = akitas.filter(a => 
+          (a.name.toLowerCase().includes(query.toLowerCase()) || a.registeredName.toLowerCase().includes(query.toLowerCase())) &&
+          a.sex === targetSex &&
+          a.id !== addNodeModal?.childId // Prevent self-parenting
+      );
+      setFoundDogs(results);
+  };
+
+  const connectExistingDog = (ancestorId: string) => {
+      if (!addNodeModal) return;
+      linkAncestor(addNodeModal.childId, addNodeModal.relation, ancestorId);
+      setAddNodeModal(null);
+  };
+
+  const createManualNode = () => {
+      if (!addNodeModal) return;
+      createAncestor(addNodeModal.childId, addNodeModal.relation, {
+          name: manualNodeForm.name,
+          registeredName: manualNodeForm.registeredName || manualNodeForm.name,
+          registrationNumber: manualNodeForm.registrationNumber
+      });
+      setAddNodeModal(null);
+  };
+
+  const handleScanPedigree = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      setIsScanning(true);
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+          const result = await parsePedigreeImage(reader.result as string);
+          
+          if (result) {
+              // Simple implementation: Only filling Sire/Dam and Grandparents if they don't exist
+              // In a real app, this would need complex conflict resolution logic
+              
+              if (result.sire && !akita.sireId) {
+                  createAncestor(akita.id, 'sire', { name: result.sire.name, registeredName: result.sire.name, registrationNumber: result.sire.regNum });
+              }
+              if (result.dam && !akita.damId) {
+                  createAncestor(akita.id, 'dam', { name: result.dam.name, registeredName: result.dam.name, registrationNumber: result.dam.regNum });
+              }
+              // NOTE: To keep this demo code manageable, we aren't recursively drilling down to create grandparents
+              // based on the newly created Sire ID. That would require chaining creates.
+              // However, this demonstrates the core AI logic.
+              
+              setScanResult(`AI Scanned Document. Found: Sire: ${result.sire?.name || 'N/A'}, Dam: ${result.dam?.name || 'N/A'}. Tree updated.`);
+          } else {
+              setScanResult("Could not extract legible pedigree data from image.");
+          }
+          setIsScanning(false);
+      };
+      reader.readAsDataURL(file);
+  };
+
+  // Health Record Handlers
+  const handleHealthFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewHealthRecord(prev => ({ ...prev, attachmentUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const saveHealthRecord = () => {
+      if (newHealthRecord.type && newHealthRecord.result && newHealthRecord.date) {
+           const updatedRecords = [...akita.healthRecords, newHealthRecord as HealthRecord];
+           updateAkita(akita.id, { healthRecords: updatedRecords });
+           setIsAddingHealth(false);
+           setNewHealthRecord({ type: 'OFA_HIPS', result: '', date: '', certificateNumber: '', notes: '', attachmentUrl: undefined });
+           if(healthFileRef.current) healthFileRef.current.value = '';
+      }
+  };
+
+  const deleteHealthRecord = (index: number) => {
+      if (window.confirm("Are you sure you want to delete this health record?")) {
+          const updatedRecords = akita.healthRecords.filter((_, i) => i !== index);
+          updateAkita(akita.id, { healthRecords: updatedRecords });
+      }
+  };
+
+  return (
+    <div className="space-y-6 relative">
+      {/* Header Card */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+         <div className="h-64 bg-gray-800 relative">
+             {akita.gallery[0] ? (
+                 <img src={akita.gallery[0]} className="w-full h-full object-cover opacity-70" alt="banner" />
+             ) : (
+                 <div className="w-full h-full bg-gradient-to-r from-brand-500 to-gray-700 opacity-50"></div>
+             )}
+         </div>
+         <div className="px-6 pb-6 relative">
+             <div className="flex flex-col md:flex-row items-start md:items-end -mt-12 mb-4">
+                 <img src={akita.avatar} alt={akita.name} className="w-32 h-32 rounded-full border-4 border-white object-cover shadow-lg bg-white" />
+                 <div className="mt-2 md:ml-4 md:mb-2 flex-1">
+                     {isEditing ? (
+                         <div className="max-w-md space-y-2 mt-4 md:mt-0">
+                             <input 
+                                type="text" name="registeredName" value={editForm.registeredName} onChange={handleEditChange}
+                                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-brand-500 focus:border-brand-500 font-bold text-lg"
+                                placeholder="Registered Name"
+                             />
+                             <input 
+                                type="text" name="name" value={editForm.name} onChange={handleEditChange}
+                                className="block w-1/2 border-gray-300 rounded-md shadow-sm focus:ring-brand-500 focus:border-brand-500 text-sm"
+                                placeholder="Call Name"
+                             />
+                         </div>
+                     ) : (
+                        <>
+                            <h1 className="text-2xl font-bold text-gray-900">{akita.registeredName}</h1>
+                            <div className="flex items-center text-gray-600 space-x-3">
+                                <span className="bg-brand-100 text-brand-800 text-xs px-2 py-1 rounded-full font-bold uppercase">{akita.titles.join(' ')}</span>
+                                <span>Call Name: <strong>{akita.name}</strong></span>
+                            </div>
+                        </>
+                     )}
+                 </div>
+                 <div className="md:ml-auto md:mb-2 mt-4 flex space-x-2">
+                    {isEditing ? (
+                         <>
+                            <button onClick={saveChanges} className="bg-brand-600 text-white px-4 py-2 rounded shadow hover:bg-brand-700 flex items-center">
+                                <Save className="w-4 h-4 mr-1" /> Save
+                            </button>
+                            <button onClick={() => setIsEditing(false)} className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded shadow hover:bg-gray-50 flex items-center">
+                                <X className="w-4 h-4 mr-1" /> Cancel
+                            </button>
+                         </>
+                    ) : (
+                        <>
+                            {isOwner && (
+                                <button 
+                                    onClick={() => setIsEditing(true)}
+                                    className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded shadow hover:bg-gray-50 flex items-center font-medium"
+                                >
+                                    <Edit className="w-4 h-4 mr-2" /> Edit Profile
+                                </button>
+                            )}
+                            {!isOwner && (
+                                <button className="bg-brand-600 text-white px-4 py-2 rounded shadow hover:bg-brand-700 flex items-center">
+                                    <Heart className="w-4 h-4 mr-2" /> Follow
+                                </button>
+                            )}
+                        </>
+                    )}
+                 </div>
+             </div>
+
+             {/* Tabs (Hidden when editing) */}
+             {!isEditing && (
+                <div className="border-b border-gray-200">
+                    <nav className="-mb-px flex space-x-8 overflow-x-auto">
+                        {['about', 'pedigree', 'health', 'gallery'].map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab as any)}
+                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm capitalize ${
+                                    activeTab === tab ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                            >
+                                {tab}
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+             )}
+         </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="bg-white shadow rounded-lg p-6 min-h-[400px]">
+          
+          {isEditing ? (
+              /* ------------------- EDIT MODE FORM (PROFILE) ------------------- */
+              <div className="space-y-6 max-w-4xl mx-auto">
+                  <div className="border-b pb-4">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700">Registration Number</label>
+                              <input type="text" name="registrationNumber" value={editForm.registrationNumber} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                              <input type="date" name="dob" value={editForm.dob} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700">Sex</label>
+                              <select name="sex" value={editForm.sex} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm">
+                                  <option>Male</option>
+                                  <option>Female</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700">Color</label>
+                              <input type="text" name="color" value={editForm.color} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" />
+                          </div>
+                          <div className="col-span-2">
+                              <label className="block text-sm font-medium text-gray-700">Titles (comma separated)</label>
+                              <input type="text" name="titlesString" value={editForm.titlesString} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" placeholder="e.g. GCH, ROM, CGC" />
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="border-b pb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Bio / Description</label>
+                        <button type="button" onClick={handleGenerateBio} disabled={isGeneratingBio || !editForm.name} className="text-xs flex items-center text-brand-600 hover:text-brand-800 disabled:opacity-50">
+                            <Sparkles className="w-3 h-3 mr-1" />
+                            {isGeneratingBio ? 'Generating...' : 'Auto-Generate Bio'}
+                        </button>
+                      </div>
+                      <textarea name="about" rows={4} value={editForm.about} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" />
+                  </div>
+
+                  <div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Manage Achievements</h3>
+                      <ul className="mb-4 space-y-2">
+                          {editForm.achievements.map((ach: Achievement) => (
+                              <li key={ach.id} className="flex justify-between items-center bg-gray-50 p-3 rounded">
+                                  <div>
+                                      <span className="font-bold">{ach.title}</span>
+                                      <span className="text-gray-500 text-sm mx-2">- {ach.event}</span>
+                                      <span className="text-gray-400 text-xs">({ach.date})</span>
+                                  </div>
+                                  <button onClick={() => handleRemoveAchievement(ach.id)} className="text-red-500 hover:text-red-700 p-1">
+                                      <Trash className="w-4 h-4" />
+                                  </button>
+                              </li>
+                          ))}
+                          {editForm.achievements.length === 0 && <p className="text-gray-500 italic text-sm">No achievements listed.</p>}
+                      </ul>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end bg-gray-50 p-4 rounded-lg">
+                          <div className="sm:col-span-1">
+                              <label className="text-xs text-gray-500">Title</label>
+                              <input type="text" placeholder="Best of Breed" value={newAchievement.title} onChange={(e) => setNewAchievement({...newAchievement, title: e.target.value})} className="w-full text-sm border-gray-300 rounded-md" />
+                          </div>
+                          <div className="sm:col-span-1">
+                               <label className="text-xs text-gray-500">Event</label>
+                              <input type="text" placeholder="Show Name" value={newAchievement.event} onChange={(e) => setNewAchievement({...newAchievement, event: e.target.value})} className="w-full text-sm border-gray-300 rounded-md" />
+                          </div>
+                          <div className="sm:col-span-1">
+                              <label className="text-xs text-gray-500">Date</label>
+                              <input type="date" value={newAchievement.date} onChange={(e) => setNewAchievement({...newAchievement, date: e.target.value})} className="w-full text-sm border-gray-300 rounded-md" />
+                          </div>
+                          <button onClick={handleAddAchievement} type="button" className="bg-green-600 text-white px-3 py-2 rounded-md text-sm hover:bg-green-700 flex justify-center items-center">
+                              <Plus className="w-4 h-4 mr-1" /> Add
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          ) : (
+             /* ------------------- VIEW MODE ------------------- */
+             <>
+                {/* ABOUT TAB */}
+                {activeTab === 'about' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileText className="w-5 h-5 mr-2 text-gray-400"/>Details</h3>
+                            <dl className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                                <div className="sm:col-span-1">
+                                    <dt className="text-sm font-medium text-gray-500">Registration #</dt>
+                                    <dd className="mt-1 text-sm text-gray-900">{akita.registrationNumber}</dd>
+                                </div>
+                                <div className="sm:col-span-1">
+                                    <dt className="text-sm font-medium text-gray-500">Date of Birth</dt>
+                                    <dd className="mt-1 text-sm text-gray-900">{akita.dob}</dd>
+                                </div>
+                                <div className="sm:col-span-1">
+                                    <dt className="text-sm font-medium text-gray-500">Sex</dt>
+                                    <dd className="mt-1 text-sm text-gray-900">{akita.sex}</dd>
+                                </div>
+                                <div className="sm:col-span-1">
+                                    <dt className="text-sm font-medium text-gray-500">Color</dt>
+                                    <dd className="mt-1 text-sm text-gray-900">{akita.color}</dd>
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <dt className="text-sm font-medium text-gray-500">Owner</dt>
+                                    <dd className="mt-1 text-sm text-gray-900">
+                                        {owner ? <Link to={`/profile/${owner.id}`} className="text-brand-600 hover:underline">{owner.name}</Link> : 'Unknown'}
+                                    </dd>
+                                </div>
+                                {akita.about && (
+                                    <div className="sm:col-span-2 mt-4 pt-4 border-t">
+                                        <dt className="text-sm font-medium text-gray-500">About {akita.name}</dt>
+                                        <dd className="mt-1 text-sm text-gray-800 whitespace-pre-line">{akita.about}</dd>
+                                    </div>
+                                )}
+                            </dl>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Award className="w-5 h-5 mr-2 text-yellow-500"/>Achievements</h3>
+                            {akita.achievements.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {akita.achievements.map(ach => (
+                                        <li key={ach.id} className="bg-gray-50 p-3 rounded-md">
+                                            <p className="font-bold text-gray-800">{ach.title}</p>
+                                            <p className="text-sm text-gray-500">{ach.event} - {ach.date}</p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : <p className="text-gray-500 italic">No achievements recorded yet.</p>}
+                        </div>
+                    </div>
+                )}
+
+                {/* PEDIGREE TAB */}
+                {activeTab === 'pedigree' && (
+                    <div>
+                        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><GitBranch className="w-5 h-5 mr-2 text-gray-400"/>3-Generation Pedigree</h3>
+                            
+                            <div className="flex space-x-2">
+                                {isEditingPedigree ? (
+                                     <button 
+                                        onClick={() => setIsEditingPedigree(false)}
+                                        className="text-sm bg-green-600 text-white px-4 py-1.5 rounded-full hover:bg-green-700 shadow-sm transition"
+                                    >
+                                        Done Editing
+                                    </button>
+                                ) : (
+                                    <>
+                                        {isOwner && (
+                                            <button 
+                                                onClick={() => setIsEditingPedigree(true)}
+                                                className="text-sm bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-full hover:bg-gray-50 shadow-sm transition flex items-center"
+                                            >
+                                                <Edit className="w-3 h-3 mr-1" /> Edit Tree
+                                            </button>
+                                        )}
+                                        
+                                        {/* Scan Pedigree Button */}
+                                        {isOwner && (
+                                            <label className="cursor-pointer text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-100 border border-blue-200 transition flex items-center">
+                                                {isScanning ? <span className="animate-pulse">Scanning...</span> : <><FileScan className="w-3 h-3 mr-1" /> Scan Image</>}
+                                                <input 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    ref={pedigreeInputRef}
+                                                    accept="image/*"
+                                                    onChange={handleScanPedigree}
+                                                    disabled={isScanning}
+                                                />
+                                            </label>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        
+                        {scanResult && (
+                            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-800">
+                                <strong className="block mb-1 text-indigo-900">Scan Result:</strong>
+                                {scanResult}
+                            </div>
+                        )}
+
+                        {/* Tree Container */}
+                        <div className="overflow-x-auto pb-4">
+                            <div className="min-w-[700px] flex justify-center py-6 bg-gray-50 rounded-xl border border-gray-100">
+                                <PedigreeNode 
+                                    akitaId={akita.id} 
+                                    depth={3} 
+                                    isEditingPedigree={isEditingPedigree}
+                                    onAddNode={openAddNodeModal}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* HEALTH TAB */}
+                {activeTab === 'health' && (
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><Activity className="w-5 h-5 mr-2 text-red-500"/>Health & Genetics</h3>
+                            {isOwner && (
+                                <button 
+                                    onClick={() => setIsAddingHealth(!isAddingHealth)}
+                                    className="text-sm bg-red-50 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-100 border border-red-100 flex items-center"
+                                >
+                                    {isAddingHealth ? <X className="w-4 h-4 mr-1"/> : <Plus className="w-4 h-4 mr-1"/>}
+                                    {isAddingHealth ? 'Cancel' : 'Add Record'}
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Add Health Record Form */}
+                        {isAddingHealth && (
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 shadow-inner">
+                                <h4 className="font-bold text-gray-700 mb-3 text-sm">Add New Health Record</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500">Test Type</label>
+                                        <select 
+                                            value={newHealthRecord.type} 
+                                            onChange={(e) => setNewHealthRecord({...newHealthRecord, type: e.target.value as any})} 
+                                            className="mt-1 block w-full text-sm border-gray-300 rounded-md"
+                                        >
+                                            <option value="OFA_HIPS">OFA Hips</option>
+                                            <option value="OFA_ELBOWS">OFA Elbows</option>
+                                            <option value="OFA_EYES">OFA Eyes</option>
+                                            <option value="THYROID">Thyroid</option>
+                                            <option value="VGL">VGL Diversity</option>
+                                            <option value="AMELOGENESIS_IMPERFECTA">Amelogenesis Imperfecta</option>
+                                            <option value="OTHER">Other</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500">Result / Grade</label>
+                                        <input 
+                                            type="text" 
+                                            value={newHealthRecord.result} 
+                                            onChange={(e) => setNewHealthRecord({...newHealthRecord, result: e.target.value})} 
+                                            className="mt-1 block w-full text-sm border-gray-300 rounded-md" 
+                                            placeholder="e.g. Excellent, Normal"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500">Date</label>
+                                        <input 
+                                            type="date" 
+                                            value={newHealthRecord.date} 
+                                            onChange={(e) => setNewHealthRecord({...newHealthRecord, date: e.target.value})} 
+                                            className="mt-1 block w-full text-sm border-gray-300 rounded-md" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500">Ref / Cert #</label>
+                                        <input 
+                                            type="text" 
+                                            value={newHealthRecord.certificateNumber} 
+                                            onChange={(e) => setNewHealthRecord({...newHealthRecord, certificateNumber: e.target.value})} 
+                                            className="mt-1 block w-full text-sm border-gray-300 rounded-md" 
+                                            placeholder="Optional"
+                                        />
+                                    </div>
+                                    <div className="col-span-1 md:col-span-2">
+                                        <label className="block text-xs font-medium text-gray-500">Upload Certificate (Image/PDF)</label>
+                                        <div className="mt-1 flex items-center">
+                                            <label className="cursor-pointer bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm hover:bg-gray-50 flex items-center shadow-sm">
+                                                <Upload className="w-4 h-4 mr-2" /> 
+                                                {newHealthRecord.attachmentUrl ? "File Selected (Ready to Save)" : "Choose File"}
+                                                <input 
+                                                    type="file" 
+                                                    ref={healthFileRef}
+                                                    className="hidden" 
+                                                    accept="image/*,.pdf"
+                                                    onChange={handleHealthFileChange} 
+                                                />
+                                            </label>
+                                            {newHealthRecord.attachmentUrl && (
+                                                <span className="ml-3 text-xs text-green-600 flex items-center">
+                                                    <Sparkles className="w-3 h-3 mr-1" /> File attached
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-4 flex justify-end">
+                                    <button 
+                                        onClick={saveHealthRecord}
+                                        disabled={!newHealthRecord.result || !newHealthRecord.date}
+                                        className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                                    >
+                                        Save Record
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                            <table className="min-w-full divide-y divide-gray-300">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900">Test</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Result</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Date</th>
+                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Ref #</th>
+                                        <th className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">Doc</th>
+                                        {isOwner && <th className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Action</th>}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 bg-white">
+                                    {akita.healthRecords.map((rec, idx) => (
+                                        <tr key={idx}>
+                                            <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900">{rec.type.replace('_', ' ')}</td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-green-600 font-bold">{rec.result}</td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{rec.date}</td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{rec.certificateNumber || 'N/A'}</td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 text-center">
+                                                {rec.attachmentUrl ? (
+                                                    <a href={rec.attachmentUrl} download={`health-cert-${idx}`} className="inline-flex items-center text-brand-600 hover:text-brand-800" title="Download Certificate">
+                                                        <FileText className="w-4 h-4" />
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-gray-300">-</span>
+                                                )}
+                                            </td>
+                                            {isOwner && (
+                                                <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500">
+                                                    <button onClick={() => deleteHealthRecord(idx)} className="text-red-400 hover:text-red-600 p-1">
+                                                        <Trash className="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                    {akita.healthRecords.length === 0 && (
+                                        <tr>
+                                            <td colSpan={isOwner ? 6 : 5} className="py-4 text-center text-gray-500 italic">No health records available.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <h4 className="font-bold text-blue-800 flex items-center mb-2"><Dna className="w-4 h-4 mr-2"/> Genetic Diversity</h4>
+                            <p className="text-sm text-blue-700">
+                                Link VGL or Embark results here to display diversity metrics (OI, IR) for better breeding decisions.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* GALLERY TAB */}
+                {activeTab === 'gallery' && (
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><Camera className="w-5 h-5 mr-2 text-gray-400"/>Photo Gallery</h3>
+                            <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm px-3 py-1.5 rounded-md transition">
+                                Upload Photo
+                                <input type="file" className="hidden" />
+                            </label>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {akita.gallery.map((img, idx) => (
+                                <div key={idx} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                                    <img src={img} alt={`Gallery ${idx}`} className="w-full h-full object-cover hover:scale-110 transition duration-300" />
+                                </div>
+                            ))}
+                            {akita.gallery.length === 0 && <p className="col-span-3 text-center text-gray-500 py-10">No photos uploaded yet.</p>}
+                        </div>
+                    </div>
+                )}
+             </>
+          )}
+
+          {/* ADD ANCESTOR MODAL */}
+          {addNodeModal && addNodeModal.open && (
+              <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                  <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setAddNodeModal(null)}></div>
+                      <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                      <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                              <div className="sm:flex sm:items-start">
+                                  <div className="w-full">
+                                      <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                          Add {addNodeModal.relation === 'sire' ? 'Sire (Father)' : 'Dam (Mother)'}
+                                      </h3>
+                                      
+                                      {/* Search Section */}
+                                      <div className="mb-6">
+                                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Search Database</label>
+                                          <div className="relative">
+                                              <input 
+                                                  type="text" 
+                                                  value={searchQuery}
+                                                  onChange={(e) => handleSearchDogs(e.target.value)}
+                                                  placeholder="Search by name..."
+                                                  className="w-full border border-gray-300 rounded-md pl-10 pr-4 py-2 text-sm focus:ring-brand-500 focus:border-brand-500"
+                                              />
+                                              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                                          </div>
+                                          
+                                          {/* Search Results */}
+                                          {foundDogs.length > 0 && (
+                                              <ul className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md divide-y">
+                                                  {foundDogs.map(dog => (
+                                                      <li key={dog.id} className="p-2 hover:bg-gray-50 flex justify-between items-center cursor-pointer" onClick={() => connectExistingDog(dog.id)}>
+                                                          <div>
+                                                              <p className="text-sm font-bold">{dog.registeredName}</p>
+                                                              <p className="text-xs text-gray-500">{dog.name}</p>
+                                                          </div>
+                                                          <button className="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded">Select</button>
+                                                      </li>
+                                                  ))}
+                                              </ul>
+                                          )}
+                                          {searchQuery && foundDogs.length === 0 && (
+                                              <p className="text-xs text-gray-400 mt-2 italic">No dogs found. You can add manually below.</p>
+                                          )}
+                                      </div>
+
+                                      <div className="relative flex py-2 items-center">
+                                          <div className="flex-grow border-t border-gray-300"></div>
+                                          <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">OR CREATE NEW</span>
+                                          <div className="flex-grow border-t border-gray-300"></div>
+                                      </div>
+
+                                      {/* Manual Create Section */}
+                                      <div className="mt-4 space-y-3">
+                                          <input 
+                                            type="text" 
+                                            placeholder="Registered Name"
+                                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                            value={manualNodeForm.registeredName}
+                                            onChange={e => setManualNodeForm({...manualNodeForm, registeredName: e.target.value})}
+                                          />
+                                           <input 
+                                            type="text" 
+                                            placeholder="Call Name (e.g. Bear)"
+                                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                            value={manualNodeForm.name}
+                                            onChange={e => setManualNodeForm({...manualNodeForm, name: e.target.value})}
+                                          />
+                                          <input 
+                                            type="text" 
+                                            placeholder="Registration Number (Optional)"
+                                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                            value={manualNodeForm.registrationNumber}
+                                            onChange={e => setManualNodeForm({...manualNodeForm, registrationNumber: e.target.value})}
+                                          />
+                                          <button 
+                                            disabled={!manualNodeForm.name}
+                                            onClick={createManualNode}
+                                            className="w-full bg-brand-600 text-white py-2 rounded-md text-sm font-bold hover:bg-brand-700 disabled:opacity-50"
+                                          >
+                                              Create & Link Ancestor
+                                          </button>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                              <button type="button" className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm" onClick={() => setAddNodeModal(null)}>
+                                  Cancel
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          )}
+
+      </div>
+    </div>
+  );
+};
+
+export default AkitaDetail;

@@ -1,0 +1,247 @@
+
+import React, { useState, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useStore } from '../context/StoreContext';
+import { ArrowLeft, PawPrint, Plus, Save, Scale, X, Camera } from 'lucide-react';
+import { Puppy } from '../types';
+
+const LitterDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const { getLitter, getAkita, currentUser, addPuppy, updatePuppy } = useStore();
+  
+  const [isAddingPuppy, setIsAddingPuppy] = useState(false);
+  const [newPuppyForm, setNewPuppyForm] = useState({ name: '', sex: 'Male', color: '', status: 'Available', weight: '' });
+  
+  // State for updating a specific puppy
+  const [editingPuppyId, setEditingPuppyId] = useState<string | null>(null);
+  const [weightUpdate, setWeightUpdate] = useState('');
+  const [noteUpdate, setNoteUpdate] = useState('');
+
+  const litter = getLitter(id || '');
+  
+  if (!litter) return <div className="text-center py-10">Litter not found</div>;
+
+  const isBreeder = currentUser.id === litter.breederId;
+
+  const sire = litter.sireId ? getAkita(litter.sireId) : null;
+  const dam = litter.damId ? getAkita(litter.damId) : null;
+  const sireName = sire ? sire.name : (litter.sireName || 'Unknown Sire');
+  const damName = dam ? dam.name : (litter.damName || 'Unknown Dam');
+
+  const handleAddPuppy = (e: React.FormEvent) => {
+      e.preventDefault();
+      const newPuppy: Puppy = {
+          id: Date.now().toString(),
+          litterId: litter.id,
+          name: newPuppyForm.name,
+          sex: newPuppyForm.sex as 'Male' | 'Female',
+          color: newPuppyForm.color,
+          status: newPuppyForm.status as any,
+          growthHistory: newPuppyForm.weight ? [{ date: new Date().toISOString().split('T')[0], weight: newPuppyForm.weight }] : []
+      };
+      addPuppy(litter.id, newPuppy);
+      setIsAddingPuppy(false);
+      setNewPuppyForm({ name: '', sex: 'Male', color: '', status: 'Available', weight: '' });
+  };
+
+  const handleAddWeight = (puppyId: string) => {
+      if (!weightUpdate) return;
+      const puppy = litter.puppies.find(p => p.id === puppyId);
+      if (puppy) {
+          const newEntry = {
+              date: new Date().toISOString().split('T')[0],
+              weight: weightUpdate,
+              note: noteUpdate
+          };
+          updatePuppy(litter.id, puppyId, { growthHistory: [...puppy.growthHistory, newEntry] });
+          setWeightUpdate('');
+          setNoteUpdate('');
+          setEditingPuppyId(null);
+      }
+  };
+
+  const handleStatusChange = (puppyId: string, status: string) => {
+      updatePuppy(litter.id, puppyId, { status: status as any });
+  };
+
+  return (
+    <div className="space-y-6">
+        <div className="flex items-center justify-between">
+             <Link to={`/profile/${litter.breederId}`} className="text-sm text-gray-500 hover:text-brand-600 flex items-center">
+                 <ArrowLeft className="w-4 h-4 mr-1" /> Back to Profile
+             </Link>
+        </div>
+
+        {/* Litter Header */}
+        <div className="bg-white rounded-lg shadow-sm p-6 flex flex-col md:flex-row gap-6">
+            <div className="w-full md:w-1/4">
+                <img src={litter.coverImage} alt="Litter" className="w-full h-40 object-cover rounded-lg" />
+            </div>
+            <div className="flex-1">
+                <h1 className="text-2xl font-bold text-gray-900">{sireName} x {damName}</h1>
+                <p className="text-gray-500 mb-2">Whelped: {new Date(litter.whelpDate).toDateString()}</p>
+                <p className="text-gray-700">{litter.description}</p>
+                <div className="mt-4 flex gap-2">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${litter.status === 'Available' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {litter.status}
+                    </span>
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                        {litter.puppies.length} Puppies Tracked
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        {/* Puppy Management */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                    <PawPrint className="w-5 h-5 mr-2 text-brand-600" />
+                    Litter Tracking
+                </h2>
+                {isBreeder && !isAddingPuppy && (
+                    <button onClick={() => setIsAddingPuppy(true)} className="bg-brand-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-brand-700 flex items-center">
+                        <Plus className="w-4 h-4 mr-1" /> Add Puppy
+                    </button>
+                )}
+            </div>
+
+            {isAddingPuppy && (
+                <div className="p-6 bg-brand-50 border-b border-brand-100">
+                    <h3 className="text-sm font-bold text-brand-800 mb-3">New Puppy Details</h3>
+                    <form onSubmit={handleAddPuppy} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                        <div>
+                            <label className="text-xs text-gray-500">Identifier/Name</label>
+                            <input type="text" placeholder="e.g. Blue Collar" value={newPuppyForm.name} onChange={e => setNewPuppyForm({...newPuppyForm, name: e.target.value})} className="w-full border-gray-300 rounded-md text-sm" required />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Sex</label>
+                            <select value={newPuppyForm.sex} onChange={e => setNewPuppyForm({...newPuppyForm, sex: e.target.value})} className="w-full border-gray-300 rounded-md text-sm">
+                                <option>Male</option>
+                                <option>Female</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Color</label>
+                            <input type="text" placeholder="Red Fawn" value={newPuppyForm.color} onChange={e => setNewPuppyForm({...newPuppyForm, color: e.target.value})} className="w-full border-gray-300 rounded-md text-sm" required />
+                        </div>
+                         <div>
+                            <label className="text-xs text-gray-500">Current Weight</label>
+                            <input type="text" placeholder="e.g. 1.2 lbs" value={newPuppyForm.weight} onChange={e => setNewPuppyForm({...newPuppyForm, weight: e.target.value})} className="w-full border-gray-300 rounded-md text-sm" />
+                        </div>
+                        <div className="flex gap-2">
+                            <button type="submit" className="bg-brand-600 text-white px-4 py-2 rounded-md text-sm flex-1">Add</button>
+                            <button type="button" onClick={() => setIsAddingPuppy(false)} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            <div className="divide-y divide-gray-200">
+                {litter.puppies.map(puppy => (
+                    <div key={puppy.id} className="p-6 hover:bg-gray-50 transition">
+                        <div className="flex flex-col md:flex-row gap-6">
+                            {/* Puppy Avatar / Info */}
+                            <div className="w-full md:w-1/4 flex flex-col items-center text-center md:items-start md:text-left">
+                                <div className="relative w-24 h-24 rounded-full bg-gray-200 overflow-hidden mb-3">
+                                    {puppy.avatar ? (
+                                        <img src={puppy.avatar} alt={puppy.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                            <PawPrint className="w-10 h-10" />
+                                        </div>
+                                    )}
+                                </div>
+                                <h3 className="font-bold text-lg text-gray-900">{puppy.name}</h3>
+                                <p className="text-sm text-gray-500">{puppy.color} {puppy.sex}</p>
+                                <div className="mt-2">
+                                    <select 
+                                        value={puppy.status} 
+                                        onChange={(e) => handleStatusChange(puppy.id, e.target.value)}
+                                        className={`text-xs font-bold py-1 px-2 rounded-full border-0 cursor-pointer ${
+                                            puppy.status === 'Available' ? 'bg-green-100 text-green-800' :
+                                            puppy.status === 'Reserved' ? 'bg-yellow-100 text-yellow-800' :
+                                            puppy.status === 'Sold' ? 'bg-gray-200 text-gray-600' :
+                                            'bg-purple-100 text-purple-800'
+                                        }`}
+                                        disabled={!isBreeder}
+                                    >
+                                        <option value="Available">Available</option>
+                                        <option value="Reserved">Reserved</option>
+                                        <option value="Sold">Sold</option>
+                                        <option value="Keeper">Keeper</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Growth Chart / Data */}
+                            <div className="flex-1">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="text-sm font-bold text-gray-700 flex items-center"><Scale className="w-4 h-4 mr-1"/> Growth History</h4>
+                                    {isBreeder && (
+                                        <button 
+                                            onClick={() => setEditingPuppyId(editingPuppyId === puppy.id ? null : puppy.id)}
+                                            className="text-xs text-brand-600 hover:underline"
+                                        >
+                                            {editingPuppyId === puppy.id ? 'Cancel Update' : 'Update Weight'}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Weight Update Form */}
+                                {editingPuppyId === puppy.id && (
+                                    <div className="mb-4 bg-blue-50 p-3 rounded-md flex gap-2 items-center">
+                                        <input 
+                                            type="text" 
+                                            placeholder="New Weight" 
+                                            value={weightUpdate} 
+                                            onChange={e => setWeightUpdate(e.target.value)} 
+                                            className="text-sm border-gray-300 rounded w-24"
+                                        />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Notes (optional)" 
+                                            value={noteUpdate} 
+                                            onChange={e => setNoteUpdate(e.target.value)} 
+                                            className="text-sm border-gray-300 rounded flex-1"
+                                        />
+                                        <button onClick={() => handleAddWeight(puppy.id)} className="bg-blue-600 text-white px-3 py-1 rounded text-xs">Save</button>
+                                    </div>
+                                )}
+
+                                <div className="bg-gray-100 rounded-lg p-3">
+                                    <div className="grid grid-cols-3 gap-2 text-xs font-bold text-gray-500 border-b border-gray-200 pb-1 mb-1">
+                                        <div>Date</div>
+                                        <div>Weight</div>
+                                        <div>Notes</div>
+                                    </div>
+                                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                                        {puppy.growthHistory.length > 0 ? (
+                                            [...puppy.growthHistory].reverse().map((entry, idx) => (
+                                                <div key={idx} className="grid grid-cols-3 gap-2 text-sm text-gray-700">
+                                                    <div>{entry.date}</div>
+                                                    <div className="font-medium">{entry.weight}</div>
+                                                    <div className="text-gray-500 truncate">{entry.note || '-'}</div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-xs text-gray-400 text-center py-2">No weight data recorded.</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {litter.puppies.length === 0 && (
+                    <div className="text-center py-12 text-gray-500">
+                        No puppies added yet.
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
+  );
+};
+
+export default LitterDetail;
