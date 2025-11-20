@@ -1,8 +1,8 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 const getAI = () => {
-    const apiKey = process.env.API_KEY;
+    // Create React App requires env variables to start with REACT_APP_
+    const apiKey = process.env.REACT_APP_API_KEY;
     if (!apiKey) return null;
     return new GoogleGenAI({ apiKey });
 };
