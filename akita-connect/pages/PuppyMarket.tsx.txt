@@ -1,0 +1,108 @@
+import React, { useState } from 'react';
+import { useStore } from '../context/StoreContext';
+import { Link } from 'react-router-dom';
+import { PawPrint, Calendar, MapPin, Search } from 'lucide-react';
+
+const PuppyMarket: React.FC = () => {
+  const { litters, getUser, getAkita } = useStore();
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+
+  const filteredLitters = litters.filter(l => 
+      filterStatus === 'all' ? true : l.status === filterStatus
+  );
+
+  return (
+    <div className="space-y-6">
+        {/* Hero Section */}
+        <div className="bg-brand-600 rounded-lg shadow-lg p-8 text-white relative overflow-hidden">
+             <div className="relative z-10">
+                <h1 className="text-3xl font-bold mb-2">Puppy Marketplace</h1>
+                <p className="text-brand-100 max-w-xl">Find your next best friend or show prospect from verified Akita breeders. Browse current litters and expected breedings.</p>
+             </div>
+             <PawPrint className="absolute right-[-20px] bottom-[-20px] w-48 h-48 text-brand-700 opacity-30 rotate-12" />
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-gray-700 mr-2">Status:</span>
+            {['all', 'Available', 'Expecting', 'Planned'].map(status => (
+                <button 
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`px-4 py-1.5 rounded-full text-sm transition ${
+                        filterStatus === status 
+                        ? 'bg-brand-100 text-brand-700 font-bold' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                >
+                    {status === 'all' ? 'All Listings' : status}
+                </button>
+            ))}
+        </div>
+
+        {/* Listings Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredLitters.map(litter => {
+                const breeder = getUser(litter.breederId);
+                const sire = getAkita(litter.sireId);
+                const dam = getAkita(litter.damId);
+
+                return (
+                    <div key={litter.id} className="bg-white rounded-lg shadow hover:shadow-md transition overflow-hidden border border-gray-200 flex flex-col">
+                         <div className="h-48 bg-gray-200 relative">
+                             <img src={litter.coverImage} alt="Litter" className="w-full h-full object-cover" />
+                             <div className="absolute top-3 right-3 bg-white bg-opacity-90 text-brand-700 text-xs font-bold px-2 py-1 rounded shadow-sm uppercase">
+                                 {litter.status}
+                             </div>
+                         </div>
+                         
+                         <div className="p-5 flex-1 flex flex-col">
+                             <div className="flex items-center mb-3">
+                                 <img src={breeder?.avatar} alt={breeder?.name} className="w-8 h-8 rounded-full mr-2 object-cover" />
+                                 <div className="overflow-hidden">
+                                     <Link to={`/profile/${breeder?.id}`} className="text-sm font-bold text-gray-900 hover:underline block truncate">{breeder?.kennelName || breeder?.name}</Link>
+                                     <div className="flex items-center text-xs text-gray-500">
+                                         <MapPin className="w-3 h-3 mr-1" /> USA
+                                     </div>
+                                 </div>
+                             </div>
+
+                             <h3 className="text-lg font-bold text-gray-900 mb-1">
+                                 {sire?.name} <span className="text-gray-400 text-sm font-normal">x</span> {dam?.name}
+                             </h3>
+                             <div className="flex items-center text-sm text-gray-500 mb-3">
+                                 <Calendar className="w-4 h-4 mr-1" /> 
+                                 {litter.status === 'Expecting' || litter.status === 'Planned' ? 'Due: ' : 'Born: '} 
+                                 {new Date(litter.whelpDate).toLocaleDateString()}
+                             </div>
+                             
+                             <p className="text-gray-600 text-sm line-clamp-3 mb-4 flex-1">
+                                 {litter.description}
+                             </p>
+
+                             <div className="mt-auto pt-4 border-t flex items-center justify-between">
+                                 <div className="text-sm font-medium">
+                                     {litter.puppyCount ? <span className="text-brand-600">{litter.puppyCount} Puppies</span> : <span className="text-gray-400">Count TBD</span>}
+                                 </div>
+                                 <Link to={`/messages?recipient=${breeder?.id}`} className="bg-brand-600 text-white text-sm px-4 py-2 rounded hover:bg-brand-700 transition">
+                                     Contact
+                                 </Link>
+                             </div>
+                         </div>
+                    </div>
+                );
+            })}
+        </div>
+
+        {filteredLitters.length === 0 && (
+             <div className="text-center py-20 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                 <PawPrint className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                 <h3 className="text-lg font-medium text-gray-900">No litters found</h3>
+                 <p className="text-gray-500">Check back later or adjust your filters.</p>
+             </div>
+        )}
+    </div>
+  );
+};
+
+export default PuppyMarket;

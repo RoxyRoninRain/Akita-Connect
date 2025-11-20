@@ -1,0 +1,137 @@
+import React, { useState, useEffect } from 'react';
+import { useStore } from '../context/StoreContext';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Search, MapPin, Dog } from 'lucide-react';
+
+const Directory: React.FC = () => {
+  const { users, akitas } = useStore();
+  const [searchParams] = useSearchParams();
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Effect to populate search from URL query
+  useEffect(() => {
+      const query = searchParams.get('q');
+      if (query) {
+          setSearchTerm(query);
+      }
+  }, [searchParams]);
+
+  const filteredUsers = users.filter(user => {
+    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (user.kennelName && user.kennelName.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesRole && matchesSearch;
+  });
+
+  const filteredAkitas = searchTerm ? akitas.filter(dog => 
+    dog.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    dog.registeredName.toLowerCase().includes(searchTerm.toLowerCase())
+  ) : [];
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-white p-6 rounded-lg shadow-sm">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">Community Directory</h1>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+             </div>
+             <input 
+                type="text" 
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+                placeholder="Search members, kennels, or dogs..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+             />
+          </div>
+          <div className="flex gap-2">
+              {['all', 'breeder', 'owner', 'enthusiast'].map((role) => (
+                  <button
+                    key={role}
+                    onClick={() => setRoleFilter(role)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium capitalize transition ${
+                        roleFilter === role 
+                        ? 'bg-brand-600 text-white' 
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                      {role}
+                  </button>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Dog Results (Only show if searching) */}
+      {searchTerm && filteredAkitas.length > 0 && (
+          <div>
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <Dog className="w-5 h-5 mr-2 text-brand-600" /> 
+                  Matching Akitas
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {filteredAkitas.map(dog => (
+                      <Link key={dog.id} to={`/akita/${dog.id}`} className="bg-white rounded-lg shadow hover:shadow-md transition overflow-hidden border border-gray-100 group">
+                          <div className="h-40 bg-gray-200 overflow-hidden">
+                              <img src={dog.avatar} alt={dog.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                          </div>
+                          <div className="p-4">
+                              <h3 className="font-bold text-gray-900 truncate">{dog.registeredName}</h3>
+                              <p className="text-sm text-gray-500">Call Name: {dog.name}</p>
+                              {dog.titles.length > 0 && (
+                                  <span className="mt-2 inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                                      {dog.titles.join(', ')}
+                                  </span>
+                              )}
+                          </div>
+                      </Link>
+                  ))}
+              </div>
+              <div className="border-b border-gray-200 my-8"></div>
+          </div>
+      )}
+
+      {/* User Results */}
+      <div>
+        {searchTerm && <h2 className="text-lg font-bold text-gray-900 mb-4">Members</h2>}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredUsers.map(user => (
+                <div key={user.id} className="bg-white rounded-lg shadow hover:shadow-md transition overflow-hidden border border-gray-200">
+                    <div className="h-24 bg-gradient-to-r from-gray-200 to-gray-300 relative">
+                        {user.banner && <img src={user.banner} className="w-full h-full object-cover opacity-50" alt="banner" />}
+                    </div>
+                    <div className="px-6 pb-6 relative">
+                        <div className="-mt-10 mb-4 text-center">
+                            <img src={user.avatar} alt={user.name} className="w-20 h-20 rounded-full border-4 border-white inline-block shadow-sm object-cover bg-white" />
+                        </div>
+                        <div className="text-center">
+                            <Link to={`/profile/${user.id}`} className="text-lg font-bold text-gray-900 hover:text-brand-600">{user.name}</Link>
+                            {user.kennelName && <p className="text-brand-600 font-medium text-sm">{user.kennelName}</p>}
+                            <span className={`inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-full uppercase ${
+                                user.role === 'breeder' ? 'bg-purple-100 text-purple-800' :
+                                user.role === 'owner' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                                {user.role}
+                            </span>
+                            <p className="mt-3 text-sm text-gray-500 line-clamp-2 h-10">{user.bio}</p>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-100 flex justify-center">
+                            <Link to={`/profile/${user.id}`} className="text-sm font-medium text-brand-600 hover:text-brand-500">View Profile &rarr;</Link>
+                        </div>
+                    </div>
+                </div>
+            ))}
+            {filteredUsers.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                    No members found matching your criteria.
+                </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Directory;

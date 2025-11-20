@@ -1,0 +1,306 @@
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, User, Dog, MessageCircle, Users, PlusCircle, Search, Menu, X, Sparkles, BookOpen, PawPrint, Bell, Calendar, ChevronDown, LogOut } from 'lucide-react';
+import { useStore } from '../context/StoreContext';
+import { askAkitaExpert } from '../services/gemini';
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { currentUser, notifications, users, switchUser, isAuthenticated, logout } = useStore();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCommunityOpen, setIsCommunityOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const communityDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Hide navbar on auth pages
+  const isAuthPage = ['/login', '/signup', '/onboarding'].includes(location.pathname);
+
+  // Primary Navigation (Always Visible)
+  const mainNavItems = [
+    { icon: Home, label: 'Feed', path: '/' },
+    { icon: Dog, label: 'My Akitas', path: currentUser ? `/profile/${currentUser.id}` : '/login' },
+    { icon: PawPrint, label: 'Puppies', path: '/puppy-market' },
+    { icon: MessageCircle, label: 'Messages', path: '/messages' },
+  ];
+
+  // Secondary Navigation (Grouped under "Community")
+  const communityNavItems = [
+    { icon: Users, label: 'Forums', path: '/forums' },
+    { icon: Calendar, label: 'Events', path: '/events' },
+    { icon: BookOpen, label: 'Directory', path: '/directory' },
+  ];
+
+  // Combined for Mobile
+  const allNavItems = [...mainNavItems, ...communityNavItems];
+
+  const unreadNotifications = notifications.filter(n => n.userId === currentUser?.id && !n.isRead).length;
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (communityDropdownRef.current && !communityDropdownRef.current.contains(event.target as Node)) {
+        setIsCommunityOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleAskAI = async () => {
+      if(!aiQuery.trim()) return;
+      setAiLoading(true);
+      const answer = await askAkitaExpert(aiQuery);
+      setAiResponse(answer);
+      setAiLoading(false);
+  };
+
+  const handleGlobalSearch = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && searchQuery.trim()) {
+          navigate(`/directory?q=${encodeURIComponent(searchQuery)}`);
+          setSearchQuery('');
+      }
+  };
+
+  const handleLogout = () => {
+      logout();
+      navigate('/login');
+  };
+
+  if (isAuthPage || !isAuthenticated) {
+      return <div className="min-h-screen bg-gray-100 font-sans text-gray-900">{children}</div>;
+  }
+
+  if (!currentUser) return null; // Safety check
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
+      {/* Navbar */}
+      <nav className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+               <Link to="/" className="flex-shrink-0 flex items-center mr-4">
+                  <span className="text-2xl font-bold text-brand-600">Akita</span>
+                  <span className="text-2xl font-light text-gray-800">Connect</span>
+               </Link>
+               
+               {/* Desktop Nav */}
+               <div className="hidden md:ml-4 md:flex md:space-x-4 lg:space-x-6">
+                  {mainNavItems.map((item) => (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200 ${
+                        location.pathname === item.path
+                          ? 'border-brand-500 text-gray-900'
+                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      }`}
+                    >
+                      <item.icon className="w-4 h-4 mr-2" />
+                      {item.label}
+                    </Link>
+                  ))}
+
+                  {/* Community Dropdown */}
+                  <div className="relative flex items-center" ref={communityDropdownRef}>
+                      <button 
+                        onClick={() => setIsCommunityOpen(!isCommunityOpen)}
+                        className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium border-transparent focus:outline-none transition-colors duration-200 ${
+                            communityNavItems.some(i => i.path === location.pathname)
+                            ? 'text-brand-600 border-brand-500'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                          Community <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${isCommunityOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {isCommunityOpen && (
+                          <div className="absolute top-full left-0 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 py-1 animate-fade-in-down">
+                              {communityNavItems.map((item) => (
+                                  <Link
+                                    key={item.path}
+                                    to={item.path}
+                                    onClick={() => setIsCommunityOpen(false)}
+                                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                                  >
+                                      <item.icon className="w-4 h-4 mr-2 text-gray-400" />
+                                      {item.label}
+                                  </Link>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+               </div>
+            </div>
+
+            <div className="flex items-center space-x-3 lg:space-x-4">
+                <div className="hidden lg:block relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input 
+                        type="text" 
+                        className="bg-gray-100 text-sm rounded-full pl-10 pr-4 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 w-48 xl:w-64 transition-all"
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={handleGlobalSearch}
+                    />
+                </div>
+
+                <button 
+                    onClick={() => setIsAIOpen(true)}
+                    className="hidden md:flex items-center px-3 py-1.5 bg-gradient-to-r from-brand-500 to-purple-600 text-white rounded-full text-sm hover:opacity-90 transition shadow-sm">
+                    <Sparkles className="w-4 h-4 mr-1" />
+                    AI Expert
+                </button>
+
+                <Link to="/notifications" className="relative p-1 rounded-full text-gray-400 hover:text-brand-600 focus:outline-none transition">
+                    <Bell className="h-6 w-6" />
+                    {unreadNotifications > 0 && (
+                        <span className="absolute top-0 right-0 block h-4 w-4 rounded-full ring-2 ring-white bg-red-500 text-white text-[10px] font-bold text-center leading-3">
+                            {unreadNotifications}
+                        </span>
+                    )}
+                </Link>
+                
+                {/* User Switcher / Logout */}
+                <div className="relative group">
+                     <Link to={`/profile/${currentUser.id}`}>
+                        <img className="h-8 w-8 rounded-full object-cover border border-gray-200" src={currentUser.avatar} alt={currentUser.name} />
+                    </Link>
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 hidden group-hover:block ring-1 ring-black ring-opacity-5">
+                         <div className="px-4 py-2 border-b border-gray-100">
+                             <p className="text-sm font-bold text-gray-900">{currentUser.name}</p>
+                             <p className="text-xs text-gray-500 capitalize">{currentUser.role}</p>
+                         </div>
+                         <p className="px-4 py-2 text-xs text-gray-400 uppercase mt-1">Switch User (Dev)</p>
+                         {users.map(u => (
+                             <button 
+                                key={u.id}
+                                onClick={() => switchUser(u.id)}
+                                className={`block w-full text-left px-4 py-2 text-sm ${currentUser.id === u.id ? 'bg-gray-100 font-bold text-brand-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                             >
+                                 {u.name}
+                             </button>
+                         ))}
+                         <div className="border-t border-gray-100 mt-1">
+                            <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center">
+                                <LogOut className="w-4 h-4 mr-2"/> Logout
+                            </button>
+                         </div>
+                    </div>
+                </div>
+                
+                <div className="-mr-2 flex items-center md:hidden">
+                    <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none">
+                        {isMobileMenuOpen ? <X className="h-6 w-6"/> : <Menu className="h-6 w-6"/>}
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Mobile Menu */}
+        {isMobileMenuOpen && (
+             <div className="md:hidden bg-white border-t border-gray-200">
+                <div className="pt-2 pb-3 space-y-1">
+                    {allNavItems.map(item => (
+                        <Link 
+                            key={item.path} 
+                            to={item.path} 
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
+                                location.pathname === item.path
+                                ? 'bg-brand-50 border-brand-500 text-brand-700'
+                                : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
+                            }`}
+                        >
+                            <div className="flex items-center">
+                                <item.icon className="w-5 h-5 mr-2" />
+                                {item.label}
+                            </div>
+                        </Link>
+                    ))}
+                     <button onClick={() => { setIsAIOpen(true); setIsMobileMenuOpen(false); }} className="w-full text-left block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-brand-600 hover:bg-gray-50">
+                        <Sparkles className="w-5 h-5 inline mr-2"/> AI Expert
+                    </button>
+                    <button onClick={handleLogout} className="w-full text-left block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-red-600 hover:bg-gray-50">
+                        <LogOut className="w-5 h-5 inline mr-2"/> Logout
+                    </button>
+                </div>
+             </div>
+        )}
+      </nav>
+
+      {/* AI Modal */}
+      {isAIOpen && (
+          <div className="fixed inset-0 z-[100] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={() => setIsAIOpen(false)}></div>
+                <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div className="sm:flex sm:items-start">
+                            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-brand-100 sm:mx-0 sm:h-10 sm:w-10">
+                                <Sparkles className="h-6 w-6 text-brand-600" />
+                            </div>
+                            <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">Ask the Akita Expert</h3>
+                                <div className="mt-2">
+                                    <p className="text-sm text-gray-500">Powered by Gemini. Ask about breeding, genetics, show standards, or health.</p>
+                                    <div className="mt-4 h-48 overflow-y-auto bg-gray-50 rounded p-2 text-sm text-gray-700 mb-2 border border-gray-200">
+                                        {aiResponse ? <p className="whitespace-pre-line">{aiResponse}</p> : <span className="text-gray-400 italic">Answers will appear here...</span>}
+                                    </div>
+                                    <textarea 
+                                        className="w-full border rounded-md p-2 text-sm focus:ring-brand-500 focus:border-brand-500"
+                                        rows={3}
+                                        placeholder="E.g., What are the symptoms of VKH in Akitas?"
+                                        value={aiQuery}
+                                        onChange={(e) => setAiQuery(e.target.value)}
+                                    ></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button 
+                            type="button" 
+                            disabled={aiLoading}
+                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-600 text-base font-medium text-white hover:bg-brand-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                            onClick={handleAskAI}
+                        >
+                            {aiLoading ? 'Thinking...' : 'Ask'}
+                        </button>
+                        <button 
+                            type="button" 
+                            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                            onClick={() => setIsAIOpen(false)}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+          </div>
+      )}
+
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+export default Layout;

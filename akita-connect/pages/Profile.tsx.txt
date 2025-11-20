@@ -1,0 +1,508 @@
+
+import React, { useState, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useStore } from '../context/StoreContext';
+import { MapPin, Calendar, User as UserIcon, Plus, Camera, Upload, Image as ImageIcon, PawPrint, Globe, Award, Briefcase, Flag, Edit, Save, X } from 'lucide-react';
+import { BreederInfo, OwnerInfo } from '../types';
+
+const Profile: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const { getUser, akitas, currentUser, updateUser, addUserGalleryItem, litters, getAkita } = useStore();
+  const [activeTab, setActiveTab] = useState<'overview' | 'kennel' | 'gallery' | 'litters'>('overview');
+  
+  // Edit State for Overview
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+
+  // Refs for file inputs
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  const user = getUser(id || '');
+  const userAkitas = akitas.filter(a => a.ownerId === user?.id);
+  const userLitters = litters.filter(l => l.breederId === user?.id);
+  const isOwnProfile = currentUser.id === user?.id;
+
+  if (!user) return <div className="text-center py-10">User not found</div>;
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner' | 'gallery') => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              const result = reader.result as string;
+              if (type === 'avatar') {
+                  updateUser(user.id, { avatar: result });
+              } else if (type === 'banner') {
+                  updateUser(user.id, { banner: result });
+              } else if (type === 'gallery') {
+                  addUserGalleryItem(user.id, result);
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const startEditing = () => {
+      setActiveTab('overview');
+      setEditForm({
+          name: user.name,
+          bio: user.bio,
+          location: user.location || '',
+          kennelName: user.kennelName || '',
+          breederInfo: user.breederInfo || {},
+          ownerInfo: user.ownerInfo || {}
+      });
+      setIsEditingInfo(true);
+  };
+
+  const saveInfo = () => {
+      // Process comma separated clubs if needed, though simple input is fine for now
+      updateUser(user.id, {
+          name: editForm.name,
+          bio: editForm.bio,
+          location: editForm.location,
+          kennelName: editForm.kennelName,
+          breederInfo: editForm.breederInfo,
+          ownerInfo: editForm.ownerInfo
+      });
+      setIsEditingInfo(false);
+  };
+
+  const updateBreederField = (field: keyof BreederInfo, value: any) => {
+      setEditForm({
+          ...editForm,
+          breederInfo: { ...editForm.breederInfo, [field]: value }
+      });
+  };
+
+  const updateOwnerField = (field: keyof OwnerInfo, value: any) => {
+      setEditForm({
+          ...editForm,
+          ownerInfo: { ...editForm.ownerInfo, [field]: value }
+      });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Cover Area */}
+      <div className="bg-white shadow rounded-lg overflow-hidden relative group">
+        {/* Banner Image */}
+        <div className="h-64 bg-gray-300 relative overflow-hidden">
+            {user.banner ? (
+                <img src={user.banner} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+                <div className="w-full h-full bg-gradient-to-r from-brand-500 to-purple-600"></div>
+            )}
+            
+            {/* Banner Edit Button */}
+            {isOwnProfile && (
+                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                        onClick={() => bannerInputRef.current?.click()}
+                        className="bg-black bg-opacity-50 hover:bg-opacity-70 text-white px-3 py-2 rounded-md text-sm font-medium flex items-center backdrop-blur-sm"
+                    >
+                        <Camera className="w-4 h-4 mr-2" /> Edit Cover
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={bannerInputRef} 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, 'banner')} 
+                    />
+                </div>
+            )}
+        </div>
+
+        <div className="px-6 pb-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end -mt-16 relative">
+            {/* Avatar */}
+            <div className="relative group/avatar">
+                <img src={user.avatar} alt={user.name} className="w-32 h-32 rounded-full border-4 border-white object-cover shadow-md bg-white" />
+                {isOwnProfile && (
+                    <button 
+                        onClick={() => avatarInputRef.current?.click()}
+                        className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 rounded-full opacity-0 group-hover/avatar:opacity-100 transition text-white"
+                    >
+                        <Camera className="w-6 h-6" />
+                    </button>
+                )}
+                <input 
+                    type="file" 
+                    ref={avatarInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'avatar')} 
+                />
+            </div>
+
+            <div className="mt-4 sm:mt-0 sm:ml-4 text-center sm:text-left flex-1 mb-2">
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center justify-center sm:justify-start">
+                  {user.name}
+                  {user.role === 'breeder' && (
+                    <span className="ml-2 flex items-center" title="Verified Breeder">
+                        <Award className="w-5 h-5 text-brand-600" />
+                    </span>
+                  )}
+              </h1>
+              <p className="text-gray-600 font-medium">{user.kennelName || <span className="capitalize">{user.role}</span>}</p>
+              {user.location && (
+                  <div className="flex items-center justify-center sm:justify-start text-xs text-gray-500 mt-1">
+                      <MapPin className="w-3 h-3 mr-1" /> {user.location}
+                  </div>
+              )}
+            </div>
+            <div className="mt-4 sm:mt-0 mb-2 flex space-x-2">
+                 {!isOwnProfile && (
+                    <button className="bg-brand-600 text-white px-4 py-2 rounded-md font-medium hover:bg-brand-700">Message</button>
+                )}
+                {isOwnProfile && !isEditingInfo && (
+                     <>
+                         <Link to="/add-akita" className="bg-brand-600 text-white px-4 py-2 rounded-md font-medium hover:bg-brand-700 flex items-center shadow-sm">
+                            <Plus className="w-4 h-4 mr-2" /> Add Dog
+                         </Link>
+                         <button onClick={startEditing} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md font-medium hover:bg-gray-50 flex items-center shadow-sm">
+                            <Edit className="w-4 h-4 mr-2" /> Edit Profile
+                         </button>
+                     </>
+                )}
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="mt-6 border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8 justify-center sm:justify-start overflow-x-auto">
+                  {['overview', 'kennel', 'gallery'].concat(user.role === 'breeder' ? ['litters'] : []).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab as any)}
+                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm capitalize ${
+                            activeTab === tab 
+                            ? 'border-brand-500 text-brand-600' 
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                          {tab} {tab === 'kennel' && `(${userAkitas.length})`}
+                      </button>
+                  ))}
+              </nav>
+          </div>
+        </div>
+      </div>
+      
+      {/* Tab Content */}
+      <div className="bg-white shadow rounded-lg p-6 min-h-[300px]">
+        
+        {/* OVERVIEW TAB */}
+        {activeTab === 'overview' && (
+            <div className="max-w-4xl">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg flex items-center text-gray-900">
+                        <UserIcon className="w-5 h-5 mr-2 text-brand-500" /> 
+                        {user.role === 'breeder' ? 'Kennel Information' : 'About Me'}
+                    </h3>
+                </div>
+
+                {isEditingInfo ? (
+                    /* --- EDIT MODE FORM --- */
+                    <div className="space-y-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Display Name</label>
+                                <input type="text" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Location (City, State)</label>
+                                <input type="text" value={editForm.location} onChange={(e) => setEditForm({...editForm, location: e.target.value})} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="block text-sm font-medium text-gray-700">Bio / Philosophy</label>
+                                <textarea rows={3} value={editForm.bio} onChange={(e) => setEditForm({...editForm, bio: e.target.value})} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" />
+                            </div>
+                        </div>
+
+                        {/* Role Specific Fields */}
+                        {user.role === 'breeder' && (
+                            <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="col-span-2">
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-2">Breeder Details</h4>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Kennel Name</label>
+                                    <input type="text" value={editForm.kennelName} onChange={(e) => setEditForm({...editForm, kennelName: e.target.value})} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Year Established</label>
+                                    <input type="text" value={editForm.breederInfo?.kennelEstablished || ''} onChange={(e) => updateBreederField('kennelEstablished', e.target.value)} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Website</label>
+                                    <input type="text" value={editForm.breederInfo?.website || ''} onChange={(e) => updateBreederField('website', e.target.value)} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" placeholder="https://" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Clubs / Affiliations (comma separated)</label>
+                                    <input type="text" value={editForm.breederInfo?.clubs?.join(', ') || ''} onChange={(e) => updateBreederField('clubs', e.target.value.split(',').map((c:string) => c.trim()))} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" />
+                                </div>
+                            </div>
+                        )}
+
+                        {user.role === 'owner' && (
+                            <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="col-span-2">
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-2">Owner Details</h4>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Experience Level</label>
+                                    <select value={editForm.ownerInfo?.experienceLevel || 'First Time'} onChange={(e) => updateOwnerField('experienceLevel', e.target.value)} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm">
+                                        <option>First Time</option>
+                                        <option>Intermediate</option>
+                                        <option>Expert</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Activities (comma separated)</label>
+                                    <input type="text" value={editForm.ownerInfo?.activities?.join(', ') || ''} onChange={(e) => updateOwnerField('activities', e.target.value.split(',').map((a:string) => a.trim()))} className="mt-1 block w-full border-gray-300 rounded-md p-2 shadow-sm" placeholder="Hiking, Obedience, Agility" />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end space-x-3">
+                            <button onClick={() => setIsEditingInfo(false)} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded shadow-sm hover:bg-gray-50">Cancel</button>
+                            <button onClick={saveInfo} className="bg-brand-600 text-white px-4 py-2 rounded shadow-sm hover:bg-brand-700">Save Changes</button>
+                        </div>
+                    </div>
+                ) : (
+                    /* --- VIEW MODE --- */
+                    <>
+                         <p className="text-gray-700 mb-8 whitespace-pre-line text-lg leading-relaxed">{user.bio}</p>
+                         
+                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left Column: Basic Stats */}
+                            <div className="bg-gray-50 p-5 rounded-lg space-y-3">
+                                <h4 className="font-bold text-gray-700 mb-2 border-b pb-2">Profile Status</h4>
+                                <div className="flex items-center text-gray-600">
+                                    <UserIcon className="w-4 h-4 mr-2 opacity-70" /> 
+                                    Role: <span className="font-medium ml-1 capitalize bg-gray-200 px-2 py-0.5 rounded text-xs">{user.role}</span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                    <Calendar className="w-4 h-4 mr-2 opacity-70" /> 
+                                    Joined: <span className="font-medium ml-1">{user.joinedDate}</span>
+                                </div>
+                                {user.location && (
+                                    <div className="flex items-center text-gray-600">
+                                        <MapPin className="w-4 h-4 mr-2 opacity-70" /> 
+                                        Location: <span className="font-medium ml-1">{user.location}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Column: Role Specifics */}
+                            {user.role === 'breeder' && user.breederInfo && (
+                                <div className="bg-brand-50 p-5 rounded-lg space-y-3 border border-brand-100">
+                                    <h4 className="font-bold text-brand-800 mb-2 border-b border-brand-200 pb-2 flex items-center">
+                                        <Award className="w-4 h-4 mr-2" /> Kennel Details
+                                    </h4>
+                                    {user.breederInfo.kennelEstablished && (
+                                        <div className="flex items-center text-gray-700">
+                                            <Briefcase className="w-4 h-4 mr-2 opacity-70" />
+                                            Established: <span className="font-medium ml-1">{user.breederInfo.kennelEstablished}</span>
+                                        </div>
+                                    )}
+                                    {user.breederInfo.website && (
+                                        <div className="flex items-center text-gray-700">
+                                            <Globe className="w-4 h-4 mr-2 opacity-70" />
+                                            Website: <a href={user.breederInfo.website.startsWith('http') ? user.breederInfo.website : `https://${user.breederInfo.website}`} target="_blank" rel="noreferrer" className="font-medium ml-1 text-brand-600 hover:underline">{user.breederInfo.website}</a>
+                                        </div>
+                                    )}
+                                    {user.breederInfo.clubs && user.breederInfo.clubs.length > 0 && (
+                                        <div className="mt-2">
+                                            <span className="text-xs text-brand-800 font-bold uppercase">Affiliations</span>
+                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                {user.breederInfo.clubs.map((club, idx) => (
+                                                    <span key={idx} className="bg-white text-brand-700 text-xs px-2 py-1 rounded shadow-sm border border-brand-100">{club}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {user.role === 'owner' && user.ownerInfo && (
+                                <div className="bg-green-50 p-5 rounded-lg space-y-3 border border-green-100">
+                                    <h4 className="font-bold text-green-800 mb-2 border-b border-green-200 pb-2 flex items-center">
+                                        <Flag className="w-4 h-4 mr-2" /> Experience & Activities
+                                    </h4>
+                                    <div className="flex items-center text-gray-700">
+                                        <span className="text-sm text-gray-500 w-24">Experience:</span>
+                                        <span className="font-medium">{user.ownerInfo.experienceLevel || 'Not specified'}</span>
+                                    </div>
+                                    {user.ownerInfo.activities && user.ownerInfo.activities.length > 0 && (
+                                        <div>
+                                             <span className="text-sm text-gray-500 block mb-1">Activities:</span>
+                                             <div className="flex flex-wrap gap-2">
+                                                 {user.ownerInfo.activities.map((act, idx) => (
+                                                     <span key={idx} className="bg-white text-green-700 text-xs px-2 py-1 rounded shadow-sm border border-green-100">{act}</span>
+                                                 ))}
+                                             </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                         </div>
+                    </>
+                )}
+            </div>
+        )}
+
+        {/* KENNEL TAB */}
+        {activeTab === 'kennel' && (
+            <div>
+                 <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg">Registered Akitas</h3>
+                    {/* Add Dog button is also in header now, but kept here for context if list is long */}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                    {userAkitas.map(dog => (
+                        <Link key={dog.id} to={`/akita/${dog.id}`} className="block group">
+                            <div className="aspect-square overflow-hidden rounded-lg bg-gray-200 relative shadow-sm group-hover:shadow-md transition">
+                                <img src={dog.avatar} alt={dog.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                {dog.titles.length > 0 && (
+                                    <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm">
+                                        {dog.titles[0]}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-2 text-center">
+                                <p className="font-medium text-gray-900 truncate px-1">{dog.registeredName}</p>
+                                <p className="text-xs text-gray-500">{dog.name}</p>
+                            </div>
+                        </Link>
+                    ))}
+                    {userAkitas.length === 0 && (
+                        <div className="col-span-full text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                            <p className="text-gray-500">No Akitas registered yet.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* LITTERS TAB (Breeders Only) */}
+        {activeTab === 'litters' && (
+            <div>
+                 <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg flex items-center"><PawPrint className="w-5 h-5 mr-2 text-brand-500" /> Litters & Announcements</h3>
+                    {isOwnProfile && (
+                        <Link to="/add-litter" className="text-sm bg-brand-600 text-white px-3 py-1.5 rounded-md hover:bg-brand-700 flex items-center shadow-sm">
+                            <Plus className="w-4 h-4 mr-1"/> Announce Litter
+                        </Link>
+                    )}
+                </div>
+                <div className="space-y-6">
+                    {userLitters.map(litter => {
+                        const sire = litter.sireId ? getAkita(litter.sireId) : null;
+                        const dam = litter.damId ? getAkita(litter.damId) : null;
+                        const sireName = sire ? sire.name : (litter.sireName || 'Unknown');
+                        const damName = dam ? dam.name : (litter.damName || 'Unknown');
+
+                        return (
+                             <div key={litter.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition flex flex-col md:flex-row">
+                                <div className="md:w-1/3 h-48 md:h-auto bg-gray-200 relative">
+                                     <img src={litter.coverImage} className="w-full h-full object-cover" alt="Litter" />
+                                     <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs font-bold px-2 py-1 rounded">
+                                         {litter.status}
+                                     </div>
+                                     {litter.listedInMarket && (
+                                         <div className={`absolute top-2 right-2 text-white text-xs font-bold px-2 py-1 rounded ${litter.isApproved ? 'bg-green-600' : 'bg-yellow-600'}`}>
+                                             {litter.isApproved ? 'On Market' : 'Pending Approval'}
+                                         </div>
+                                     )}
+                                </div>
+                                <div className="p-4 flex-1 flex flex-col">
+                                     <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <h4 className="font-bold text-lg text-gray-900">
+                                                {sireName} x {damName}
+                                            </h4>
+                                            <span className="text-sm text-gray-500">{new Date(litter.whelpDate).toLocaleDateString()}</span>
+                                        </div>
+                                        <p className="text-gray-600 text-sm mt-2">{litter.description}</p>
+                                        <div className="mt-4 flex items-center space-x-6">
+                                            <div className="flex items-center">
+                                                {sire ? <img src={sire.avatar} className="w-8 h-8 rounded-full mr-2 object-cover" /> : <div className="w-8 h-8 bg-gray-200 rounded-full mr-2"></div>}
+                                                <div>
+                                                    <div className="text-xs text-gray-500">Sire</div>
+                                                    <div className="text-sm font-medium">{sireName}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center">
+                                                {dam ? <img src={dam.avatar} className="w-8 h-8 rounded-full mr-2 object-cover" /> : <div className="w-8 h-8 bg-gray-200 rounded-full mr-2"></div>}
+                                                <div>
+                                                    <div className="text-xs text-gray-500">Dam</div>
+                                                    <div className="text-sm font-medium">{damName}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                     </div>
+                                     <div className="mt-4 pt-4 border-t flex justify-between items-center">
+                                         <span className="text-sm font-medium text-brand-600">{litter.puppies.length} Puppies Tracked</span>
+                                         <Link to={`/litter/${litter.id}`} className="text-sm text-gray-500 hover:text-brand-600">Manage Litter &rarr;</Link>
+                                     </div>
+                                </div>
+                             </div>
+                        );
+                    })}
+                     {userLitters.length === 0 && (
+                        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                            <p className="text-gray-500">No litters posted.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* GALLERY TAB */}
+        {activeTab === 'gallery' && (
+            <div>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg flex items-center"><ImageIcon className="w-5 h-5 mr-2 text-brand-500"/> My Gallery</h3>
+                    {isOwnProfile && (
+                        <label className="cursor-pointer bg-brand-600 text-white px-4 py-2 rounded-md hover:bg-brand-700 flex items-center text-sm font-medium shadow-sm transition">
+                            <Upload className="w-4 h-4 mr-2"/> Upload Media
+                            <input 
+                                type="file" 
+                                ref={galleryInputRef} 
+                                className="hidden" 
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, 'gallery')} 
+                            />
+                        </label>
+                    )}
+                </div>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {user.gallery && user.gallery.map((img, idx) => (
+                        <div key={idx} className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative group shadow-sm">
+                            <img src={img} alt={`Gallery ${idx}`} className="w-full h-full object-cover transition duration-500 group-hover:scale-105" />
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition duration-300"></div>
+                        </div>
+                    ))}
+                     {(!user.gallery || user.gallery.length === 0) && (
+                        <div className="col-span-full text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                            <ImageIcon className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                            <p className="text-gray-500">No photos or documents uploaded yet.</p>
+                            {isOwnProfile && <p className="text-sm text-gray-400 mt-1">Upload health certificates, show photos, or litter announcements.</p>}
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+export default Profile;
