@@ -1,0 +1,597 @@
+
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { User, Akita, Post, Thread, Message, ThreadReply, Comment, Litter, Puppy, Notification, Event, ForumCategory } from '../types';
+
+interface StoreContextType {
+  currentUser: User | null; // Nullable for auth
+  isAuthenticated: boolean;
+  users: User[];
+  akitas: Akita[];
+  posts: Post[];
+  threads: Thread[];
+  messages: Message[];
+  litters: Litter[];
+  forumCategories: ForumCategory[];
+  notifications: Notification[];
+  events: Event[];
+  
+  // Auth Actions
+  login: (email: string) => boolean; // Simple mock login by email
+  logout: () => void;
+  register: (name: string, email: string, password: string) => void;
+  completeOnboarding: (userId: string, role: User['role'], avatar: string, extraData: any) => void;
+
+  // Data Actions
+  addPost: (content: string, images?: string[], asAkitaId?: string) => void;
+  addComment: (postId: string, content: string) => void;
+  toggleLikePost: (postId: string) => void;
+  addAkita: (akita: Akita) => void;
+  updateAkita: (id: string, updates: Partial<Akita>) => void;
+  linkAncestor: (childId: string, type: 'sire' | 'dam', ancestorId: string) => void;
+  createAncestor: (childId: string, type: 'sire' | 'dam', ancestorData: Partial<Akita>) => string; // Returns new ID
+  addThread: (title: string, content: string, categoryId: string) => void;
+  addThreadReply: (threadId: string, content: string) => void;
+  addForumCategory: (title: string, description: string) => void;
+  addLitter: (litter: Litter) => void;
+  updateLitter: (litterId: string, updates: Partial<Litter>) => void;
+  approveLitter: (litterId: string) => void;
+  addPuppy: (litterId: string, puppy: Puppy) => void;
+  updatePuppy: (litterId: string, puppyId: string, updates: Partial<Puppy>) => void;
+  getAkita: (id: string) => Akita | undefined;
+  getUser: (id: string) => User | undefined;
+  getThread: (id: string) => Thread | undefined;
+  getLitter: (id: string) => Litter | undefined;
+  getForumCategory: (id: string) => ForumCategory | undefined;
+  sendMessage: (receiverId: string, content: string) => void;
+  updateUser: (userId: string, updates: Partial<User>) => void;
+  addUserGalleryItem: (userId: string, imageUrl: string) => void;
+  switchUser: (userId: string) => void;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
+  toggleEventAttendance: (eventId: string) => void;
+  addEvent: (event: Event) => void;
+}
+
+const StoreContext = createContext<StoreContextType | undefined>(undefined);
+
+const MOCK_USERS: User[] = [
+  { 
+    id: 'u1', 
+    name: 'Sarah Jenkins', 
+    kennelName: 'Mountain Mist Akitas', 
+    role: 'breeder', 
+    location: 'Denver, CO',
+    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=200', 
+    bio: 'Breeding Quality Akitas since 2010. Focused on temperament and structure.', 
+    joinedDate: '2020-01-15', 
+    gallery: [], 
+    banner: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&q=80&w=1200',
+    breederInfo: {
+        kennelEstablished: '2010',
+        clubs: ['Akita Club of America', 'Rocky Mountain Akita Club'],
+        website: 'www.mountainmistakitas.com',
+        philosophy: 'We breed for sound temperament, heavy bone, and genetic health. All our dogs are OFA tested before breeding.'
+    }
+  },
+  { 
+    id: 'u2', 
+    name: 'Mike Ross', 
+    role: 'owner', 
+    location: 'Portland, OR',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', 
+    bio: 'Just love my bears. Hiking enthusiast.', 
+    joinedDate: '2021-05-20', 
+    gallery: [],
+    ownerInfo: {
+        experienceLevel: 'Intermediate',
+        activities: ['Hiking', 'Obedience']
+    }
+  },
+  { 
+    id: 'u3', 
+    name: 'Dr. Emily Chen', 
+    role: 'enthusiast', 
+    location: 'Boston, MA',
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200', 
+    bio: 'Veterinary genetics researcher specializing in auto-immune disorders.', 
+    joinedDate: '2022-11-01', 
+    gallery: [],
+    isModerator: true 
+  },
+  { 
+    id: 'u4', 
+    name: 'Kenji Tanaka', 
+    role: 'breeder', 
+    kennelName: 'Rising Sun Akitas', 
+    location: 'Seattle, WA',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200', 
+    bio: 'Preserving the original Japanese type.', 
+    joinedDate: '2023-02-10', 
+    gallery: [],
+    breederInfo: {
+        kennelEstablished: '2005',
+        clubs: ['JACA'],
+        website: 'www.risingsun.com'
+    }
+  },
+  {
+      id: 'mod1',
+      name: 'Admin Moderator',
+      role: 'enthusiast',
+      avatar: 'https://ui-avatars.com/api/?name=Admin+Mod&background=0D8ABC&color=fff',
+      bio: 'Official Site Moderator.',
+      joinedDate: '2023-01-01',
+      gallery: [],
+      isModerator: true
+  }
+];
+
+const MOCK_AKITAS: Akita[] = [
+  {
+    id: 'a1', ownerId: 'u1', name: 'Kuma', registeredName: "Mountain Mist's Shadow Warrior", registrationNumber: 'AK-123456',
+    dob: '2019-04-12', sex: 'Male', color: 'Pinto', avatar: 'https://images.unsplash.com/photo-1564425873683-e06978db8e39?auto=format&fit=crop&q=80&w=300',
+    titles: ['GCH', 'ROM'],
+    healthRecords: [{ type: 'OFA_HIPS', result: 'Excellent', date: '2021-05-01', certificateNumber: 'OFA-123' }],
+    achievements: [{ id: 'ach1', title: 'Best in Show', date: '2022-08-15', event: 'National Akita Specialty' }],
+    gallery: ['https://images.unsplash.com/photo-1564425873683-e06978db8e39?auto=format&fit=crop&q=80&w=600', 'https://images.unsplash.com/photo-1534361960057-19889db9621e?auto=format&fit=crop&q=80&w=600'],
+    about: 'A strong male with excellent bone structure and temperament.'
+  },
+  {
+    id: 'a2', ownerId: 'u1', name: 'Yuki', registeredName: "Mountain Mist's Snow Queen", registrationNumber: 'AK-987654',
+    dob: '2020-01-30', sex: 'Female', color: 'White', avatar: 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&q=80&w=300',
+    titles: ['CH'],
+    healthRecords: [{ type: 'OFA_EYES', result: 'Normal', date: '2021-02-15' }],
+    achievements: [],
+    gallery: [],
+    about: 'Beautiful white female, very spirited.',
+    sireId: 'a1' 
+  },
+   {
+    id: 'a3', ownerId: 'u2', name: 'Hachi', registeredName: "Loyal Heart Hachi", registrationNumber: 'AK-555111',
+    dob: '2021-11-05', sex: 'Male', color: 'Red Fawn', avatar: 'https://images.unsplash.com/photo-1564054154804-84b73684139e?auto=format&fit=crop&q=80&w=300',
+    titles: [],
+    healthRecords: [],
+    achievements: [],
+    gallery: [],
+    about: 'The most loyal boy.',
+    sireId: 'a1',
+    damId: 'a2'
+  }
+];
+
+const MOCK_POSTS: Post[] = [
+  { id: 'p1', authorId: 'u1', authorType: 'User', content: 'Just got Kuma\'s OFA results back! Hips Excellent!', likes: ['u2', 'u3'], comments: [], timestamp: Date.now() - 10000000 },
+  { id: 'p2', authorId: 'u2', authorType: 'User', relatedAkitaId: 'a3', content: 'Hachi is growing so fast. 80lbs at 10 months!', images: ['https://images.unsplash.com/photo-1564054154804-84b73684139e?auto=format&fit=crop&q=80&w=600'], likes: ['u1'], comments: [], timestamp: Date.now() - 5000000 },
+];
+
+const MOCK_CATEGORIES: ForumCategory[] = [
+    { id: 'cat1', title: 'General Discussion', description: 'Talk about anything and everything Akita.' },
+    { id: 'cat2', title: 'Health & Genetics', description: 'Discuss health testing, genetic diseases, and longevity.' },
+    { id: 'cat3', title: 'Breeding & Puppies', description: 'For breeders to discuss mentorship, whelping, and raising litters.' },
+    { id: 'cat4', title: 'Shows & Events', description: 'Upcoming shows, handling tips, and results.' },
+    { id: 'cat5', title: 'Training & Behavior', description: 'Tips for training your stubborn bear.' },
+    { id: 'cat6', title: 'Rescue & Adoption', description: 'Coordinate rescues and rehoming.' }
+];
+
+const MOCK_THREADS: Thread[] = [
+    { 
+      id: 't1', 
+      title: 'Best shampoo for double coats?', 
+      content: 'I am struggling to find a shampoo that rinses out easily but also cleans deeply. Any recommendations for a show Akita?',
+      categoryId: 'cat2', 
+      authorId: 'u2', 
+      replies: [
+        { id: 'r1', threadId: 't1', authorId: 'u1', content: 'I swear by Chris Christensen products. The "Clean Start" is great.', timestamp: Date.now() - 100000 }
+      ], 
+      lastActive: Date.now() 
+    },
+    { 
+      id: 't2', 
+      title: 'Upcoming Nationals in Ohio', 
+      content: 'Who is going to the Nationals this year? We are bringing 3 dogs.',
+      categoryId: 'cat4', 
+      authorId: 'u1', 
+      replies: [], 
+      lastActive: Date.now() - 86400000 
+    },
+];
+
+const MOCK_LITTERS: Litter[] = [
+    {
+        id: 'l1',
+        breederId: 'u1',
+        sireId: 'a1',
+        damId: 'a2',
+        whelpDate: '2023-12-01',
+        puppyCount: 3,
+        status: 'Available',
+        description: 'We have 2 males and 1 female available from this champion pairing. Excellent potential for show or working homes.',
+        coverImage: 'https://images.unsplash.com/photo-1591946614720-90a587da4a36?auto=format&fit=crop&q=80&w=500',
+        isApproved: true,
+        listedInMarket: true,
+        puppies: [
+            { id: 'pup1', litterId: 'l1', name: 'Red Collar', sex: 'Male', color: 'Red Fawn', status: 'Available', growthHistory: [{ date: '2023-12-01', weight: '1.2 lbs' }, { date: '2024-01-01', weight: '8 lbs' }], avatar: 'https://images.unsplash.com/photo-1558617002-1c233719694e?auto=format&fit=crop&q=80&w=200' },
+            { id: 'pup2', litterId: 'l1', name: 'Blue Collar', sex: 'Male', color: 'Brindle', status: 'Reserved', growthHistory: [{ date: '2023-12-01', weight: '1.3 lbs' }], avatar: 'https://images.unsplash.com/photo-1546237769-1f155c72f3c7?auto=format&fit=crop&q=80&w=200' },
+            { id: 'pup3', litterId: 'l1', name: 'Pink Collar', sex: 'Female', color: 'White', status: 'Available', growthHistory: [{ date: '2023-12-01', weight: '1.1 lbs' }], avatar: 'https://images.unsplash.com/photo-1548681528-6a5c45b66b42?auto=format&fit=crop&q=80&w=200' }
+        ]
+    }
+];
+
+const MOCK_EVENTS: Event[] = [
+    {
+        id: 'e1',
+        title: 'Akita Club of America National Specialty 2024',
+        date: '2024-10-21',
+        location: 'Wilmington, OH',
+        type: 'Specialty',
+        description: 'The premier event of the year! A week of conformation showing, obedience trials, rally, and health clinics. Annual meeting and banquet included.',
+        attendees: ['u1', 'u3', 'u4'],
+        coverImage: 'https://images.unsplash.com/photo-1541336528065-8f1fdce43712?auto=format&fit=crop&q=80&w=800'
+    },
+    {
+        id: 'e2',
+        title: 'PNW Akita Play Date',
+        date: '2024-06-20',
+        location: 'Seattle, WA',
+        type: 'Meetup',
+        description: 'Casual meetup at Marymoor Park. All friendly Akitas welcome.',
+        attendees: ['u2', 'u4'],
+        coverImage: 'https://images.unsplash.com/photo-1597633425046-08f5110420b5?auto=format&fit=crop&q=80&w=500'
+    },
+    {
+        id: 'e3',
+        title: 'Garden State Akita Club Specialty',
+        date: '2024-05-05',
+        location: 'Trenton, NJ',
+        type: 'Specialty',
+        description: 'Regional specialty show held in conjunction with the Trenton Kennel Club dog show.',
+        attendees: [],
+        coverImage: 'https://images.unsplash.com/photo-1514984879728-be0aff75a6e8?auto=format&fit=crop&q=80&w=500'
+    }
+];
+
+export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>(MOCK_USERS);
+  const [akitas, setAkitas] = useState<Akita[]>(MOCK_AKITAS);
+  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
+  const [threads, setThreads] = useState<Thread[]>(MOCK_THREADS);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [litters, setLitters] = useState<Litter[]>(MOCK_LITTERS);
+  const [forumCategories, setForumCategories] = useState<ForumCategory[]>(MOCK_CATEGORIES);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
+
+  const isAuthenticated = !!currentUser;
+
+  // AUTHENTICATION METHODS
+  const login = (email: string) => {
+      // Simulating login by partial email match on name or just finding the first user for dev
+      const user = users.find(u => u.name.toLowerCase().includes(email.split('@')[0].toLowerCase()));
+      if (user) {
+          setCurrentUser(user);
+          return true;
+      }
+      // Fallback for dev: if email is 'demo', log in as u1
+      if(email.includes('demo')) {
+          setCurrentUser(users[0]);
+          return true;
+      }
+      return false;
+  };
+
+  const logout = () => {
+      setCurrentUser(null);
+  };
+
+  const register = (name: string, email: string, password: string) => {
+      // Create a basic user. They will be redirected to Onboarding to fill the rest.
+      const newUser: User = {
+          id: Date.now().toString(),
+          name,
+          role: 'enthusiast', // Default, changed in onboarding
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
+          bio: '',
+          joinedDate: new Date().toISOString().split('T')[0],
+          gallery: []
+      };
+      // Don't add to users list yet? Or add but know they are incomplete? 
+      // For simplicity, we add them, set as current, and UI handles redirection if needed.
+      setUsers([...users, newUser]);
+      setCurrentUser(newUser);
+  };
+
+  const completeOnboarding = (userId: string, role: User['role'], avatar: string, extraData: any) => {
+      const updatedUser = users.map(u => {
+          if (u.id === userId) {
+              const updated = { 
+                  ...u, 
+                  role, 
+                  avatar: avatar || u.avatar,
+                  bio: extraData.bio || '',
+                  location: extraData.location || '',
+                  kennelName: extraData.kennelName, // only if breeder
+                  breederInfo: role === 'breeder' ? extraData.breederInfo : undefined,
+                  ownerInfo: role === 'owner' ? extraData.ownerInfo : undefined
+              };
+              if (currentUser?.id === userId) setCurrentUser(updated);
+              return updated;
+          }
+          return u;
+      });
+      setUsers(updatedUser);
+  };
+
+  // --- Helper to create notification ---
+  const notify = (userId: string, type: Notification['type'], content: string, relatedId?: string) => {
+      if (!currentUser || userId === currentUser.id) return; // Don't notify self
+      const notification: Notification = {
+          id: Date.now().toString(),
+          userId,
+          type,
+          content,
+          relatedId,
+          isRead: false,
+          timestamp: Date.now()
+      };
+      setNotifications(prev => [notification, ...prev]);
+  };
+
+  const addPost = (content: string, images: string[] = [], asAkitaId?: string) => {
+    if(!currentUser) return;
+    const newPost: Post = {
+      id: Date.now().toString(),
+      authorId: currentUser.id,
+      authorType: asAkitaId ? 'Akita' : 'User',
+      relatedAkitaId: asAkitaId,
+      content,
+      images,
+      likes: [],
+      comments: [],
+      timestamp: Date.now(),
+    };
+    setPosts([newPost, ...posts]);
+  };
+
+  const addComment = (postId: string, content: string) => {
+    if(!currentUser) return;
+    const comment: Comment = {
+      id: Date.now().toString(),
+      authorId: currentUser.id,
+      content,
+      timestamp: Date.now()
+    };
+    
+    setPosts(posts.map(p => {
+      if (p.id === postId) {
+        notify(p.authorId, 'COMMENT', `${currentUser.name} commented on your post.`, postId);
+        return { ...p, comments: [...p.comments, comment] };
+      }
+      return p;
+    }));
+  };
+
+  const toggleLikePost = (postId: string) => {
+      if(!currentUser) return;
+      setPosts(posts.map(p => {
+          if (p.id === postId) {
+              const isLiked = p.likes.includes(currentUser.id);
+              if (!isLiked) {
+                  notify(p.authorId, 'LIKE', `${currentUser.name} liked your post.`, postId);
+                  return { ...p, likes: [...p.likes, currentUser.id] };
+              } else {
+                  return { ...p, likes: p.likes.filter(id => id !== currentUser.id) };
+              }
+          }
+          return p;
+      }));
+  };
+
+  const addAkita = (akita: Akita) => {
+    setAkitas([...akitas, akita]);
+  };
+
+  const updateAkita = (id: string, updates: Partial<Akita>) => {
+    setAkitas(akitas.map(a => a.id === id ? { ...a, ...updates } : a));
+  };
+
+  const linkAncestor = (childId: string, type: 'sire' | 'dam', ancestorId: string) => {
+      const updates = type === 'sire' ? { sireId: ancestorId } : { damId: ancestorId };
+      updateAkita(childId, updates);
+  };
+
+  const createAncestor = (childId: string, type: 'sire' | 'dam', ancestorData: Partial<Akita>) => {
+      const newId = Date.now().toString() + Math.random().toString().substr(2, 4);
+      const newAncestor: Akita = {
+          id: newId,
+          ownerId: 'unknown', // Or system
+          name: ancestorData.name || 'Unknown',
+          registeredName: ancestorData.registeredName || ancestorData.name || 'Unknown',
+          registrationNumber: ancestorData.registrationNumber || '',
+          dob: '',
+          sex: type === 'sire' ? 'Male' : 'Female',
+          color: '',
+          avatar: 'https://images.unsplash.com/photo-1564425873683-e06978db8e39?auto=format&fit=crop&q=80&w=300',
+          healthRecords: [],
+          achievements: [],
+          titles: [],
+          gallery: [],
+          about: 'Auto-generated ancestor'
+      };
+      
+      setAkitas(prev => [...prev, newAncestor]);
+      linkAncestor(childId, type, newId);
+      return newId;
+  };
+
+  const addThread = (title: string, content: string, categoryId: string) => {
+    if(!currentUser) return;
+    const thread: Thread = {
+      id: Date.now().toString(),
+      authorId: currentUser.id,
+      title,
+      content,
+      categoryId,
+      replies: [],
+      lastActive: Date.now()
+    };
+    setThreads([thread, ...threads]);
+  };
+
+  const addThreadReply = (threadId: string, content: string) => {
+    if(!currentUser) return;
+    const reply: ThreadReply = {
+      id: Date.now().toString(),
+      threadId,
+      authorId: currentUser.id,
+      content,
+      timestamp: Date.now()
+    };
+
+    const thread = threads.find(t => t.id === threadId);
+    if (thread) {
+        notify(thread.authorId, 'REPLY', `${currentUser.name} replied to your thread "${thread.title}"`, threadId);
+    }
+
+    setThreads(threads.map(t => {
+      if(t.id === threadId) {
+        return { ...t, replies: [...t.replies, reply], lastActive: Date.now() };
+      }
+      return t;
+    }));
+  };
+
+  const addForumCategory = (title: string, description: string) => {
+      const newCat: ForumCategory = {
+          id: Date.now().toString(),
+          title,
+          description
+      };
+      setForumCategories([...forumCategories, newCat]);
+  }
+
+  const addLitter = (litter: Litter) => {
+      const newLitter = { 
+          ...litter, 
+          isApproved: !litter.listedInMarket // Auto-approve if not in market, else needs review
+      };
+      setLitters([newLitter, ...litters]);
+  };
+
+  const updateLitter = (litterId: string, updates: Partial<Litter>) => {
+      setLitters(litters.map(l => l.id === litterId ? { ...l, ...updates } : l));
+  };
+
+  const approveLitter = (litterId: string) => {
+      const litter = litters.find(l => l.id === litterId);
+      if (litter) {
+          notify(litter.breederId, 'SYSTEM', 'Your litter has been approved for the Puppy Market.', litterId);
+      }
+      setLitters(litters.map(l => l.id === litterId ? { ...l, isApproved: true } : l));
+  };
+
+  const addPuppy = (litterId: string, puppy: Puppy) => {
+      setLitters(litters.map(l => {
+          if (l.id === litterId) {
+              return { ...l, puppies: [...l.puppies, puppy] };
+          }
+          return l;
+      }));
+  };
+
+  const updatePuppy = (litterId: string, puppyId: string, updates: Partial<Puppy>) => {
+      setLitters(litters.map(l => {
+          if (l.id === litterId) {
+              const updatedPuppies = l.puppies.map(p => p.id === puppyId ? { ...p, ...updates } : p);
+              return { ...l, puppies: updatedPuppies };
+          }
+          return l;
+      }));
+  };
+
+  const getAkita = (id: string) => akitas.find(a => a.id === id);
+  const getUser = (id: string) => users.find(u => u.id === id);
+  const getThread = (id: string) => threads.find(t => t.id === id);
+  const getLitter = (id: string) => litters.find(l => l.id === id);
+  const getForumCategory = (id: string) => forumCategories.find(c => c.id === id);
+
+  const sendMessage = (receiverId: string, content: string) => {
+      if(!currentUser) return;
+      const msg: Message = {
+          id: Date.now().toString(),
+          senderId: currentUser.id,
+          receiverId,
+          content,
+          timestamp: Date.now(),
+          read: false
+      };
+      setMessages([...messages, msg]);
+      notify(receiverId, 'MESSAGE', `New message from ${currentUser.name}`, currentUser.id);
+  }
+
+  const updateUser = (userId: string, updates: Partial<User>) => {
+    setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
+    if (currentUser?.id === userId) {
+        setCurrentUser({ ...currentUser, ...updates });
+    }
+  };
+
+  const addUserGalleryItem = (userId: string, imageUrl: string) => {
+    const user = users.find(u => u.id === userId);
+    if (user) {
+        const updatedGallery = [imageUrl, ...user.gallery];
+        updateUser(userId, { gallery: updatedGallery });
+    }
+  };
+
+  const switchUser = (userId: string) => {
+      const user = users.find(u => u.id === userId);
+      if(user) setCurrentUser(user);
+  };
+
+  const markNotificationRead = (id: string) => {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+  };
+
+  const markAllNotificationsRead = () => {
+      if(!currentUser) return;
+      setNotifications(prev => prev.map(n => n.userId === currentUser.id ? { ...n, isRead: true } : n));
+  }
+
+  const toggleEventAttendance = (eventId: string) => {
+      if(!currentUser) return;
+      setEvents(prev => prev.map(e => {
+          if(e.id === eventId) {
+              if(e.attendees.includes(currentUser.id)) {
+                  return { ...e, attendees: e.attendees.filter(uid => uid !== currentUser.id) };
+              } else {
+                  return { ...e, attendees: [...e.attendees, currentUser.id] };
+              }
+          }
+          return e;
+      }));
+  };
+
+  const addEvent = (event: Event) => {
+      setEvents([event, ...events]);
+  };
+
+  return (
+    <StoreContext.Provider value={{ 
+      currentUser, isAuthenticated, users, akitas, posts, threads, messages, litters, forumCategories, notifications, events,
+      login, logout, register, completeOnboarding,
+      addPost, addComment, toggleLikePost, addAkita, updateAkita, linkAncestor, createAncestor, addThread, addThreadReply, addForumCategory, 
+      addLitter, updateLitter, approveLitter, addPuppy, updatePuppy,
+      getAkita, getUser, getThread, getLitter, getForumCategory, sendMessage, updateUser, addUserGalleryItem, switchUser,
+      markNotificationRead, markAllNotificationsRead, toggleEventAttendance, addEvent
+    }}>
+      {children}
+    </StoreContext.Provider>
+  );
+};
+
+export const useStore = () => {
+  const context = useContext(StoreContext);
+  if (!context) throw new Error("useStore must be used within StoreProvider");
+  return context;
+};

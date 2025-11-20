@@ -1,0 +1,194 @@
+
+import React, { useState, useRef } from 'react';
+import { useStore } from '../context/StoreContext';
+import { Calendar, MapPin, Users, CheckCircle, Plus, X, Image as ImageIcon } from 'lucide-react';
+import { Event } from '../types';
+
+const Events: React.FC = () => {
+  const { events, currentUser, toggleEventAttendance, addEvent } = useStore();
+  const [filter, setFilter] = useState('all');
+  
+  // Create Event State
+  const [isCreating, setIsCreating] = useState(false);
+  const [newEvent, setNewEvent] = useState<Partial<Event>>({
+      title: '',
+      date: '',
+      location: '',
+      type: 'Meetup',
+      description: '',
+      coverImage: ''
+  });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredEvents = filter === 'all' ? events : events.filter(e => e.type === filter);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setNewEvent(prev => ({ ...prev, coverImage: reader.result as string }));
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newEvent.title || !newEvent.date) return;
+
+      const event: Event = {
+          id: Date.now().toString(),
+          title: newEvent.title!,
+          date: newEvent.date!,
+          location: newEvent.location!,
+          type: newEvent.type as any,
+          description: newEvent.description!,
+          coverImage: newEvent.coverImage || 'https://images.unsplash.com/photo-1541336528065-8f1fdce43712?auto=format&fit=crop&q=80&w=500',
+          attendees: [currentUser.id]
+      };
+      addEvent(event);
+      setIsCreating(false);
+      setNewEvent({ title: '', date: '', location: '', type: 'Meetup', description: '', coverImage: '' });
+  };
+
+  return (
+    <div className="space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-900">Events & Shows</h1>
+            <div className="mt-4 md:mt-0 flex items-center space-x-4">
+                <div className="flex space-x-2">
+                    {['all', 'Specialty', 'Meetup', 'All-Breed'].map(type => (
+                        <button 
+                            key={type}
+                            onClick={() => setFilter(type)}
+                            className={`px-3 py-1.5 rounded-full text-sm transition ${filter === type ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
+                        >
+                            {type === 'all' ? 'All Events' : type}
+                        </button>
+                    ))}
+                </div>
+                <button 
+                    onClick={() => setIsCreating(!isCreating)}
+                    className="bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-800 flex items-center"
+                >
+                    {isCreating ? <X className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>}
+                    {isCreating ? 'Cancel' : 'Host Event'}
+                </button>
+            </div>
+        </div>
+
+        {/* Create Event Form */}
+        {isCreating && (
+            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Create New Event</h2>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Event Title</label>
+                            <input required type="text" value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="e.g. NorCal Akita Walk" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Date</label>
+                            <input required type="date" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Location</label>
+                            <input required type="text" value={newEvent.location} onChange={e => setNewEvent({...newEvent, location: e.target.value})} className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="e.g. Golden Gate Park, SF" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Type</label>
+                            <select value={newEvent.type} onChange={e => setNewEvent({...newEvent, type: e.target.value as any})} className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm">
+                                <option value="Meetup">Meetup</option>
+                                <option value="Specialty">Specialty Show</option>
+                                <option value="All-Breed">All-Breed Show</option>
+                                <option value="Webinar">Webinar/Seminar</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea required rows={3} value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="Event details..."></textarea>
+                    </div>
+                    
+                    <div>
+                         <label className="block text-sm font-medium text-gray-700">Cover Image</label>
+                         <div className="mt-1 flex items-center space-x-4">
+                            {newEvent.coverImage && (
+                                <img src={newEvent.coverImage} alt="Preview" className="h-16 w-24 object-cover rounded" />
+                            )}
+                            <button 
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50 flex items-center"
+                            >
+                                <ImageIcon className="w-4 h-4 mr-2"/> Upload Image
+                            </button>
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                         </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                        <button type="submit" className="bg-brand-600 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-brand-700">
+                            Publish Event
+                        </button>
+                    </div>
+                </form>
+            </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredEvents.map(event => {
+                const isAttending = event.attendees.includes(currentUser.id);
+                return (
+                    <div key={event.id} className="bg-white rounded-lg shadow hover:shadow-md transition overflow-hidden border border-gray-200 flex flex-col">
+                        <div className="h-48 relative">
+                            <img src={event.coverImage} className="w-full h-full object-cover" alt={event.title} />
+                            <div className="absolute top-3 right-3 bg-white bg-opacity-90 text-gray-900 text-xs font-bold px-2 py-1 rounded shadow-sm uppercase">
+                                {event.type}
+                            </div>
+                        </div>
+                        <div className="p-5 flex-1 flex flex-col">
+                            <div className="flex items-start justify-between mb-2">
+                                <div>
+                                    <p className="text-brand-600 font-bold text-sm mb-1">{new Date(event.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    <h3 className="text-xl font-bold text-gray-900 leading-tight">{event.title}</h3>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center text-gray-600 text-sm mb-4 mt-1">
+                                <MapPin className="w-4 h-4 mr-1" /> {event.location}
+                            </div>
+                            
+                            <p className="text-gray-600 text-sm mb-6 flex-1 line-clamp-3">{event.description}</p>
+                            
+                            <div className="pt-4 border-t flex items-center justify-between">
+                                <div className="flex items-center text-xs text-gray-500">
+                                    <Users className="w-4 h-4 mr-1" /> {event.attendees.length} going
+                                </div>
+                                <button 
+                                    onClick={() => toggleEventAttendance(event.id)}
+                                    className={`px-4 py-2 rounded text-sm font-medium flex items-center transition ${
+                                        isAttending 
+                                        ? 'bg-green-50 text-green-700 border border-green-200' 
+                                        : 'bg-brand-600 text-white hover:bg-brand-700'
+                                    }`}
+                                >
+                                    {isAttending ? <><CheckCircle className="w-4 h-4 mr-1"/> Going</> : 'RSVP Now'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+            {filteredEvents.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    No events found. Be the first to host one!
+                </div>
+            )}
+        </div>
+    </div>
+  );
+};
+
+export default Events;

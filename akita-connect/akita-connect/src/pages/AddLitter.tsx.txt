@@ -1,0 +1,237 @@
+import React, { useState, useRef } from 'react';
+import { useStore } from '../context/StoreContext';
+import { useNavigate } from 'react-router-dom';
+import { Litter } from '../types';
+import { PawPrint, X, Image as ImageIcon, ToggleLeft, ToggleRight } from 'lucide-react';
+import { generateLitterImage } from '../services/gemini';
+
+const AddLitter: React.FC = () => {
+  const { addLitter, currentUser, akitas } = useStore();
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // State
+  const [formData, setFormData] = useState({
+      sireId: '',
+      damId: '',
+      sireName: '',
+      damName: '',
+      whelpDate: '',
+      puppyCount: '',
+      status: 'Planned',
+      description: '',
+      coverImage: '',
+      listedInMarket: false
+  });
+
+  const [manualSire, setManualSire] = useState(false);
+  const [manualDam, setManualDam] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  // Filter my dogs + males/females
+  const myMales = akitas.filter(a => a.sex === 'Male'); 
+  const myFemales = akitas.filter(a => a.ownerId === currentUser.id && a.sex === 'Female');
+
+  const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const newLitter: Litter = {
+          id: Date.now().toString(),
+          breederId: currentUser.id,
+          sireId: manualSire ? undefined : formData.sireId,
+          damId: manualDam ? undefined : formData.damId,
+          sireName: manualSire ? formData.sireName : undefined,
+          damName: manualDam ? formData.damName : undefined,
+          whelpDate: formData.whelpDate,
+          puppyCount: formData.puppyCount ? parseInt(formData.puppyCount) : undefined,
+          status: formData.status as any,
+          description: formData.description,
+          coverImage: formData.coverImage || 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&q=80&w=500',
+          listedInMarket: formData.listedInMarket,
+          puppies: []
+      };
+      addLitter(newLitter);
+      
+      if (formData.listedInMarket) {
+           alert("Your litter has been submitted for Marketplace approval.");
+      }
+      
+      navigate(`/profile/${currentUser.id}`); 
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+      setFormData({ ...formData, [e.target.name]: value });
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setFormData(prev => ({ ...prev, coverImage: reader.result as string }));
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleGenerateAIImage = async () => {
+      if (!formData.description) return;
+      setIsGeneratingImage(true);
+      const prompt = `A photorealistic, warm and inviting image of an Akita litter. ${formData.description}. High quality, soft lighting.`;
+      const image = await generateLitterImage(prompt);
+      if (image) {
+          setFormData(prev => ({ ...prev, coverImage: image }));
+      }
+      setIsGeneratingImage(false);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto bg-white shadow rounded-lg p-8">
+        <div className="flex items-center mb-6">
+            <div className="bg-brand-100 p-2 rounded-full mr-3">
+                <PawPrint className="w-6 h-6 text-brand-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">Announce a Litter</h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* SIRE FIELD */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-bold text-gray-700">Sire (Father)</label>
+                        <button type="button" onClick={() => setManualSire(!manualSire)} className="text-xs text-brand-600 flex items-center hover:underline">
+                            {manualSire ? <ToggleRight className="w-4 h-4 mr-1"/> : <ToggleLeft className="w-4 h-4 mr-1"/>}
+                            {manualSire ? "Switch to My Dogs" : "Enter Manually"}
+                        </button>
+                    </div>
+                    {manualSire ? (
+                         <input type="text" name="sireName" value={formData.sireName} onChange={handleChange} placeholder="Enter Sire's Registered Name" className="block w-full border border-gray-300 rounded-md p-2 shadow-sm" required />
+                    ) : (
+                        <select required name="sireId" value={formData.sireId} onChange={handleChange} className="block w-full border border-gray-300 rounded-md p-2 shadow-sm">
+                            <option value="">Select from My Males</option>
+                            {myMales.map(d => <option key={d.id} value={d.id}>{d.registeredName}</option>)}
+                        </select>
+                    )}
+                </div>
+
+                {/* DAM FIELD */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                     <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-bold text-gray-700">Dam (Mother)</label>
+                        <button type="button" onClick={() => setManualDam(!manualDam)} className="text-xs text-brand-600 flex items-center hover:underline">
+                             {manualDam ? <ToggleRight className="w-4 h-4 mr-1"/> : <ToggleLeft className="w-4 h-4 mr-1"/>}
+                             {manualDam ? "Switch to My Dogs" : "Enter Manually"}
+                        </button>
+                    </div>
+                    {manualDam ? (
+                         <input type="text" name="damName" value={formData.damName} onChange={handleChange} placeholder="Enter Dam's Registered Name" className="block w-full border border-gray-300 rounded-md p-2 shadow-sm" required />
+                    ) : (
+                        <select required name="damId" value={formData.damId} onChange={handleChange} className="block w-full border border-gray-300 rounded-md p-2 shadow-sm">
+                            <option value="">Select from My Females</option>
+                            {myFemales.map(d => <option key={d.id} value={d.id}>{d.registeredName}</option>)}
+                        </select>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Date (Whelp/Due)</label>
+                    <input required type="date" name="whelpDate" value={formData.whelpDate} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" />
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Status</label>
+                    <select name="status" value={formData.status} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm">
+                        <option value="Planned">Planned</option>
+                        <option value="Expecting">Expecting</option>
+                        <option value="Available">Available</option>
+                        <option value="Sold">Sold / Closed</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Puppy Count</label>
+                    <input type="number" name="puppyCount" value={formData.puppyCount} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" placeholder="Estimated or Actual" />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Description / Announcement</label>
+                <textarea required name="description" rows={4} value={formData.description} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md p-2 shadow-sm" placeholder="Describe the pairing, expected traits, temperaments, or availability info..."></textarea>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-900">List in Puppy Marketplace?</label>
+                    <input 
+                        type="checkbox" 
+                        name="listedInMarket" 
+                        checked={formData.listedInMarket} 
+                        onChange={handleChange}
+                        className="h-5 w-5 text-brand-600 border-gray-300 rounded focus:ring-brand-500" 
+                    />
+                </div>
+                <p className="text-xs text-gray-500">
+                    If checked, this litter will be submitted for moderator approval to appear in the public Puppy Market. 
+                    If unchecked, it will only be visible on your profile.
+                </p>
+            </div>
+
+             <div>
+                <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Announcement Image</label>
+                    <button 
+                        type="button" 
+                        onClick={handleGenerateAIImage} 
+                        disabled={isGeneratingImage || !formData.description}
+                        className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-100 disabled:opacity-50 transition border border-indigo-200"
+                    >
+                        {isGeneratingImage ? 'Generating...' : '✨ Generate with AI'}
+                    </button>
+                </div>
+                
+                {formData.coverImage ? (
+                    <div className="relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden group border border-gray-300">
+                        <img src={formData.coverImage} alt="Preview" className="w-full h-full object-cover" />
+                        <button 
+                            type="button"
+                            onClick={() => setFormData(prev => ({...prev, coverImage: ''}))}
+                            className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition shadow-md"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                ) : (
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-50 transition"
+                    >
+                        <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                        <span className="text-sm text-brand-600 font-medium">Click to upload a photo</span>
+                        <p className="text-xs text-gray-400 mt-1">or use AI to generate one</p>
+                    </div>
+                )}
+                <input 
+                    type="file" 
+                    ref={fileInputRef}
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                />
+            </div>
+
+            <div className="flex justify-end pt-4 border-t">
+                <button type="button" onClick={() => navigate(-1)} className="mr-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md">
+                    Cancel
+                </button>
+                <button type="submit" className="bg-brand-600 text-white px-6 py-2 rounded-md font-medium hover:bg-brand-700 shadow-sm">
+                    Create Litter
+                </button>
+            </div>
+        </form>
+    </div>
+  );
+};
+
+export default AddLitter;

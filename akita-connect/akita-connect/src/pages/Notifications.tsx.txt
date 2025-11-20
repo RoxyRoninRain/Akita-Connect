@@ -1,0 +1,60 @@
+
+import React, { useEffect } from 'react';
+import { useStore } from '../context/StoreContext';
+import { Heart, MessageCircle, MessageSquare, Reply, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+const Notifications: React.FC = () => {
+  const { notifications, currentUser, markAllNotificationsRead } = useStore();
+  
+  const myNotifications = notifications.filter(n => n.userId === currentUser.id);
+
+  // Mark all as read when visiting page
+  useEffect(() => {
+      markAllNotificationsRead();
+  }, []);
+
+  const getIcon = (type: string) => {
+      switch(type) {
+          case 'LIKE': return <Heart className="w-5 h-5 text-red-500" />;
+          case 'COMMENT': return <MessageSquare className="w-5 h-5 text-blue-500" />;
+          case 'REPLY': return <Reply className="w-5 h-5 text-purple-500" />;
+          case 'MESSAGE': return <MessageCircle className="w-5 h-5 text-green-500" />;
+          default: return <Info className="w-5 h-5 text-gray-500" />;
+      }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+                <button onClick={markAllNotificationsRead} className="text-sm text-brand-600 hover:underline">Mark all as read</button>
+            </div>
+            
+            <div className="space-y-4">
+                {myNotifications.length > 0 ? myNotifications.map(n => (
+                    <div key={n.id} className={`flex items-center p-4 rounded-lg transition ${n.isRead ? 'bg-white' : 'bg-blue-50'}`}>
+                        <div className="bg-gray-100 p-2 rounded-full mr-4">
+                            {getIcon(n.type)}
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-sm text-gray-800 font-medium">{n.content}</p>
+                            <span className="text-xs text-gray-500">{new Date(n.timestamp).toLocaleString()}</span>
+                        </div>
+                        {n.relatedId && (
+                            <Link to={n.type === 'MESSAGE' ? '/messages' : '/'} className="text-sm text-gray-500 hover:text-brand-600 border border-gray-300 px-3 py-1 rounded">
+                                View
+                            </Link>
+                        )}
+                    </div>
+                )) : (
+                    <p className="text-center text-gray-500 py-10">No notifications yet.</p>
+                )}
+            </div>
+        </div>
+    </div>
+  );
+};
+
+export default Notifications;

@@ -1,0 +1,108 @@
+
+import React, { useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useStore } from '../context/StoreContext';
+import { Clock, User, ArrowLeft } from 'lucide-react';
+
+const ThreadDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const { getThread, getUser, addThreadReply, getForumCategory } = useStore();
+  const [replyContent, setReplyContent] = useState('');
+
+  const thread = getThread(id || '');
+  
+  if (!thread) return <div className="text-center py-10">Thread not found. <Link to="/forums" className="text-brand-600 hover:underline">Return to Forums</Link></div>;
+
+  const author = getUser(thread.authorId);
+  const category = getForumCategory(thread.categoryId);
+
+  const handleReply = (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!replyContent.trim()) return;
+      addThreadReply(thread.id, replyContent);
+      setReplyContent('');
+  };
+
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto">
+        <Link to="/forums" className="inline-flex items-center text-gray-500 hover:text-gray-700">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Forums
+        </Link>
+
+        {/* Original Post */}
+        <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center space-x-2 mb-1">
+                    <span className="text-xs font-bold text-brand-600 uppercase tracking-wide bg-brand-50 px-2 py-0.5 rounded-md border border-brand-100">
+                        {category?.title || 'General'}
+                    </span>
+                    <span className="text-xs text-gray-400">#{thread.id}</span>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900 mt-1">{thread.title}</h1>
+            </div>
+            <div className="p-6 flex flex-col sm:flex-row gap-4">
+                 <div className="sm:w-40 flex-shrink-0 flex flex-col items-center text-center bg-gray-50 p-4 rounded-lg h-fit">
+                    <Link to={`/profile/${thread.authorId}`}>
+                        <img src={author?.avatar} alt={author?.name} className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm" />
+                    </Link>
+                    <Link to={`/profile/${thread.authorId}`} className="mt-2 font-bold text-brand-700 hover:underline text-sm">{author?.name || 'Unknown'}</Link>
+                    <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full mt-1 capitalize">{author?.role}</span>
+                 </div>
+                 <div className="flex-1">
+                     <div className="flex items-center justify-between text-xs text-gray-400 mb-4 border-b border-gray-100 pb-2">
+                         <div className="flex items-center">
+                             <Clock className="w-3 h-3 mr-1" /> Posted {new Date(Number(thread.id)).toLocaleString()}
+                         </div>
+                     </div>
+                     <div className="prose max-w-none text-gray-800 whitespace-pre-line leading-relaxed">
+                         {thread.content}
+                     </div>
+                 </div>
+            </div>
+        </div>
+
+        {/* Replies */}
+        <div className="space-y-4">
+            {thread.replies.map(reply => {
+                const replyAuthor = getUser(reply.authorId);
+                return (
+                    <div key={reply.id} className="bg-white shadow rounded-lg p-6 flex flex-col sm:flex-row gap-4 border border-gray-200">
+                        <div className="sm:w-40 flex-shrink-0 flex flex-col items-center text-center">
+                            <Link to={`/profile/${reply.authorId}`}>
+                                <img src={replyAuthor?.avatar} alt={replyAuthor?.name} className="w-12 h-12 rounded-full object-cover border border-gray-200" />
+                            </Link>
+                            <span className="mt-2 text-sm font-medium text-gray-900">{replyAuthor?.name || 'Unknown'}</span>
+                            <span className="text-xs text-gray-500 capitalize">{replyAuthor?.role}</span>
+                        </div>
+                        <div className="flex-1">
+                            <div className="flex items-center text-xs text-gray-400 mb-2">
+                                <Clock className="w-3 h-3 mr-1" /> {new Date(reply.timestamp).toLocaleString()}
+                            </div>
+                            <p className="text-gray-800 whitespace-pre-line">{reply.content}</p>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+
+        {/* Reply Form */}
+        <div className="bg-white shadow rounded-lg p-6 border border-gray-200">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Leave a Reply</h3>
+            <form onSubmit={handleReply}>
+                <textarea 
+                    className="w-full border border-gray-300 rounded-md p-3 focus:ring-brand-500 focus:border-brand-500 shadow-sm"
+                    rows={4}
+                    placeholder="Join the discussion..."
+                    value={replyContent}
+                    onChange={(e) => setReplyContent(e.target.value)}
+                ></textarea>
+                <div className="mt-3 flex justify-end">
+                    <button type="submit" className="bg-brand-600 text-white px-6 py-2 rounded-md font-medium hover:bg-brand-700 shadow-sm">Post Reply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+  );
+};
+
+export default ThreadDetail;
