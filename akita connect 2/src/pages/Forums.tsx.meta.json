@@ -1,0 +1,8 @@
+{
+  "id": "CF2X",
+  "name": "src/pages/Forums.tsx",
+  "description": "Forums page component listing categories and threads with links to details using store data and Tailwind CSS",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:48:31.244Z",
+  "createdAt": "2025-11-20T11:48:04.651Z"
+}

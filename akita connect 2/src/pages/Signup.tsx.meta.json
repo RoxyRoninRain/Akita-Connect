@@ -1,0 +1,8 @@
+{
+  "id": "TZ84",
+  "name": "src/pages/Signup.tsx",
+  "description": "Signup page with form for user registration including role selection using store context",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:48:01.202Z",
+  "createdAt": "2025-11-20T11:47:46.687Z"
+}

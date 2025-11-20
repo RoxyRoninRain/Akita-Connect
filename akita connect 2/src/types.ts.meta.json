@@ -1,0 +1,9 @@
+{
+  "id": "MMQ9",
+  "name": "src/types.ts",
+  "description": "TypeScript interfaces defining data models for users, Akitas, litters, posts, and other entities in AkitaConnect",
+  "source": "agent_generated",
+  "mimeType": "text/typescript",
+  "modifiedAt": "2025-11-20T11:47:31.239Z",
+  "createdAt": "2025-11-20T11:47:18.556Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "KZ7R",
+  "name": "src/pages/Profile.tsx",
+  "description": "Profile page component displaying user information, bio, and gallery using store data and Tailwind CSS",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:48:31.176Z",
+  "createdAt": "2025-11-20T11:48:04.265Z"
+}

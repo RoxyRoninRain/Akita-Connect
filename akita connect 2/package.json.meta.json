@@ -1,0 +1,9 @@
+{
+  "id": "D00X",
+  "name": "package.json",
+  "description": "Main package configuration including dependencies and scripts for the AkitaConnect React application",
+  "source": "agent_generated",
+  "mimeType": "application/json",
+  "modifiedAt": "2025-11-20T11:47:31.171Z",
+  "createdAt": "2025-11-20T11:47:18.338Z"
+}

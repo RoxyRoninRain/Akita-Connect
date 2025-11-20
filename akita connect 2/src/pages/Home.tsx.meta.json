@@ -1,0 +1,8 @@
+{
+  "id": "RRK0",
+  "name": "src/pages/Home.tsx",
+  "description": "Home page displaying recent posts, litters, and events from store data using Tailwind CSS",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:48:01.216Z",
+  "createdAt": "2025-11-20T11:47:46.833Z"
+}

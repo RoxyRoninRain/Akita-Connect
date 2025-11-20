@@ -1,0 +1,8 @@
+{
+  "id": "T43N",
+  "name": "src/pages/AddAkita.tsx",
+  "description": "Form page for adding a new Akita dog entry using store context integration",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:49:01.179Z",
+  "createdAt": "2025-11-20T11:48:32.571Z"
+}

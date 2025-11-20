@@ -1,0 +1,9 @@
+{
+  "id": "ZRLY",
+  "name": "src/services/gemini.ts",
+  "description": "Service module for integrating Google Gemini AI features like expert queries, bio generation, image generation, and pedigree parsing",
+  "source": "agent_generated",
+  "mimeType": "text/typescript",
+  "modifiedAt": "2025-11-20T11:47:31.253Z",
+  "createdAt": "2025-11-20T11:47:18.613Z"
+}
