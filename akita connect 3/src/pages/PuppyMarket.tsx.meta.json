@@ -1,0 +1,8 @@
+{
+  "id": "8MLX",
+  "name": "src/pages/PuppyMarket.tsx",
+  "description": "Overwrite PuppyMarket.tsx with corrected TypeScript code fixing implicit any in filter callback",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T15:07:16.973Z",
+  "createdAt": "2025-11-20T15:06:57.113Z"
+}

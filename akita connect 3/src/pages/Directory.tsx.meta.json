@@ -1,0 +1,8 @@
+{
+  "id": "1MFR",
+  "name": "src/pages/Directory.tsx",
+  "description": "Corrected Directory.tsx with proper TypeScript types for User in filter and map callbacks",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T15:03:46.862Z",
+  "createdAt": "2025-11-20T15:03:23.194Z"
+}

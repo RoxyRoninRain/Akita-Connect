@@ -1,0 +1,8 @@
+{
+  "id": "430Q",
+  "name": "src/components/Layout.tsx",
+  "description": "Main layout component with navigation header and footer using Tailwind CSS and React Router",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:48:01.173Z",
+  "createdAt": "2025-11-20T11:47:46.553Z"
+}

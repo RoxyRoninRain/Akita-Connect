@@ -1,0 +1,9 @@
+{
+  "id": "X98D",
+  "name": "src/services/gemini.ts",
+  "description": "Overwrite gemini.ts with corrected API integration fixing model config, chat history, error typing, and image generation placeholder",
+  "source": "agent_generated",
+  "mimeType": "text/typescript",
+  "modifiedAt": "2025-11-20T15:07:17.116Z",
+  "createdAt": "2025-11-20T15:06:57.404Z"
+}

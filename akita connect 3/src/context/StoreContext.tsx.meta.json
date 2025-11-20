@@ -1,0 +1,8 @@
+{
+  "id": "2XCL",
+  "name": "src/context/StoreContext.tsx",
+  "description": "React context provider for managing application state including users, posts, litters, and other data with mock implementations",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:47:31.306Z",
+  "createdAt": "2025-11-20T11:47:18.719Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "NJT7",
+  "name": "src/pages/Onboarding.tsx",
+  "description": "Corrected Onboarding.tsx by adding missing Link import from react-router-dom",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T15:05:47.085Z",
+  "createdAt": "2025-11-20T15:05:37.024Z"
+}

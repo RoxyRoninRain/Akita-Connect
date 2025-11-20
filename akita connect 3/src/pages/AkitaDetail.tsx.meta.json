@@ -1,0 +1,8 @@
+{
+  "id": "NPVK",
+  "name": "src/pages/AkitaDetail.tsx",
+  "description": "Overwrote with corrected code fixing implicit any type in find callback and other TS issues",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T14:56:48.893Z",
+  "createdAt": "2025-11-20T14:56:47.884Z"
+}

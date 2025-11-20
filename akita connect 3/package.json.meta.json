@@ -1,0 +1,9 @@
+{
+  "id": "JQZ4",
+  "name": "package.json",
+  "description": "Corrected the Google AI dependency from invalid '@google/genai' to official '@google/generative-ai' package.",
+  "source": "agent_generated",
+  "mimeType": "application/json",
+  "modifiedAt": "2025-11-20T13:01:37.950Z",
+  "createdAt": "2025-11-20T13:01:29.122Z"
+}

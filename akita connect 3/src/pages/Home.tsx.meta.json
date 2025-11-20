@@ -1,0 +1,8 @@
+{
+  "id": "SV3Q",
+  "name": "src/pages/Home.tsx",
+  "description": "Corrected Home.tsx with proper TypeScript types for Event and Litter in filter and map callbacks, added Link import",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T15:03:47.209Z",
+  "createdAt": "2025-11-20T15:03:23.392Z"
+}

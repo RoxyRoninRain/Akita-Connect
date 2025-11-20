@@ -1,0 +1,8 @@
+{
+  "id": "HDPN",
+  "name": "src/pages/LitterDetail.tsx",
+  "description": "Corrected LitterDetail.tsx with proper Litter typing in find callback and added necessary imports",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T15:05:46.889Z",
+  "createdAt": "2025-11-20T15:05:36.614Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "OENI",
+  "name": "src/pages/Notifications.tsx",
+  "description": "Corrected Notifications.tsx with Notification typing in filter callback",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T15:05:47.010Z",
+  "createdAt": "2025-11-20T15:05:36.866Z"
+}

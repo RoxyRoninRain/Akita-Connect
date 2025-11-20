@@ -1,0 +1,8 @@
+{
+  "id": "BO9T",
+  "name": "src/pages/Login.tsx",
+  "description": "Login page with form for email and password authentication using store context",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T11:48:01.185Z",
+  "createdAt": "2025-11-20T11:47:46.627Z"
+}

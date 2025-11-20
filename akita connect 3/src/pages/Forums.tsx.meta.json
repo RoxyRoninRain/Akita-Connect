@@ -1,0 +1,8 @@
+{
+  "id": "BYCF",
+  "name": "src/pages/Forums.tsx",
+  "description": "Corrected Forums.tsx with proper TypeScript types for ForumCategory and ForumThread in filter, map, and count functions",
+  "source": "agent_generated",
+  "modifiedAt": "2025-11-20T15:03:47.040Z",
+  "createdAt": "2025-11-20T15:03:23.281Z"
+}
